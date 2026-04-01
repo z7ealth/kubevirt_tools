@@ -59,7 +59,8 @@ defmodule KubevirtTools.MixProject do
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:k8s, "~> 2.8"}
     ]
   end
 

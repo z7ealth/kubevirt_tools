@@ -27,43 +27,55 @@ defmodule KubevirtToolsWeb.Layouts do
   """
   attr :flash, :map, required: true, doc: "the map of flash messages"
 
-  attr :current_scope, :map,
+  attr :current_scope, :any,
     default: nil,
-    doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
+    doc: "optional UI scope (e.g. cluster session label for the signed-in user)"
 
   slot :inner_block, required: true
 
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8">
+    <header class="navbar border-b border-base-300/60 bg-base-100/90 backdrop-blur-md px-4 sm:px-6 lg:px-8">
       <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
-        </a>
+        <.link navigate={~p"/"} class="flex w-fit items-center gap-3 group">
+          <img src={~p"/images/logo.svg"} width="36" alt="" />
+          <div class="flex flex-col leading-tight">
+            <span class="text-sm font-semibold tracking-tight group-hover:text-primary transition-colors">
+              KubeVirt Tools
+            </span>
+            <span
+              :if={@current_scope && Map.get(@current_scope, :label)}
+              class="text-xs text-base-content/55"
+            >
+              {Map.get(@current_scope, :label)}
+            </span>
+          </div>
+        </.link>
       </div>
       <div class="flex-none">
-        <ul class="flex flex-column px-1 space-x-4 items-center">
+        <ul class="flex items-center gap-1 sm:gap-2">
           <li>
-            <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
+            <.link navigate={~p"/dashboard"} class="btn btn-ghost btn-sm">
+              Dashboard
+            </.link>
           </li>
-          <li>
-            <a href="https://github.com/phoenixframework/phoenix" class="btn btn-ghost">GitHub</a>
+          <li :if={@current_scope}>
+            <.link href={~p"/session"} method="delete" class="btn btn-ghost btn-sm gap-1">
+              <.icon name="hero-arrow-right-on-rectangle" class="size-4 opacity-70" /> Sign out
+            </.link>
           </li>
-          <li>
+          <li :if={!@current_scope}>
+            <.link navigate={~p"/login"} class="btn btn-primary btn-sm">Sign in</.link>
+          </li>
+          <li class="pl-2 border-l border-base-300/80">
             <.theme_toggle />
-          </li>
-          <li>
-            <a href="https://hexdocs.pm/phoenix/overview.html" class="btn btn-primary">
-              Get Started <span aria-hidden="true">&rarr;</span>
-            </a>
           </li>
         </ul>
       </div>
     </header>
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-2xl space-y-4">
+    <main class="px-4 py-12 sm:px-6 lg:px-8 min-h-[calc(100vh-5rem)]">
+      <div class="mx-auto max-w-6xl space-y-4">
         {render_slot(@inner_block)}
       </div>
     </main>

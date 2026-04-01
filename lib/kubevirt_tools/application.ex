@@ -11,9 +11,7 @@ defmodule KubevirtTools.Application do
       KubevirtToolsWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:kubevirt_tools, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: KubevirtTools.PubSub},
-      # Start a worker by calling: KubevirtTools.Worker.start_link(arg)
-      # {KubevirtTools.Worker, arg},
-      # Start to serve requests, typically the last entry
+      KubevirtTools.KubeconfigStore,
       KubevirtToolsWeb.Endpoint
     ]
 

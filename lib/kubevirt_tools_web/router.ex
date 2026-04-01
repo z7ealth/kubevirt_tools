@@ -17,6 +17,14 @@ defmodule KubevirtToolsWeb.Router do
   scope "/", KubevirtToolsWeb do
     pipe_through :browser
 
+    post "/session", SessionController, :create
+    delete "/session", SessionController, :delete
+
+    live_session :kube do
+      live "/login", LoginLive
+      live "/dashboard", DashboardLive
+    end
+
     get "/", PageController, :home
   end
 
