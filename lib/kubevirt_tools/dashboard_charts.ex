@@ -126,6 +126,52 @@ defmodule KubevirtTools.DashboardCharts do
     })
   end
 
+  @doc """
+  Donut for Kubernetes nodes: schedulable (Ready, not cordoned), cordoned (Ready + unschedulable),
+  not ready — similar to vSphere hosts connected vs maintenance vs failed.
+  """
+  def node_scheduling_donut(schedulable, cordoned, not_ready)
+      when is_integer(schedulable) and is_integer(cordoned) and is_integer(not_ready) do
+    labels = ["Schedulable", "Cordoned", "Not ready"]
+    series = [schedulable, cordoned, not_ready]
+
+    {series, labels, colors} =
+      if Enum.sum(series) == 0 do
+        {[1], ["No nodes"], ["#64748b"]}
+      else
+        {series, labels, [@colors.green, @colors.amber, @colors.red]}
+      end
+
+    chart_with_opts(%{
+      "chart" => %{"type" => "donut", "height" => 200},
+      "series" => series,
+      "labels" => labels,
+      "colors" => colors,
+      "legend" => %{
+        "position" => "bottom",
+        "horizontalAlign" => "center",
+        "offsetY" => 0,
+        "height" => 38,
+        "fontSize" => "10px",
+        "itemMargin" => %{"horizontal" => 5, "vertical" => 2}
+      },
+      "plotOptions" => %{
+        "pie" => %{
+          "donut" => %{
+            "size" => "72%",
+            "labels" => %{
+              "show" => true,
+              "name" => %{"show" => true, "fontSize" => "11px"},
+              "value" => %{"show" => true, "fontSize" => "11px"}
+            }
+          }
+        }
+      },
+      "stroke" => %{"width" => 0},
+      "grid" => %{"padding" => %{"bottom" => 4, "top" => 2}}
+    })
+  end
+
   def vms_per_node_bar(labels, counts) when is_list(labels) and is_list(counts) do
     chart_with_opts(%{
       "chart" => %{"type" => "bar", "height" => 200},
@@ -262,13 +308,7 @@ defmodule KubevirtTools.DashboardCharts do
       },
       "colors" => [@colors.violet],
       "legend" => %{"show" => false},
-      "grid" => %{"padding" => %{"left" => 12, "right" => 8, "top" => 4, "bottom" => 28}},
-      "subtitle" => %{
-        "text" => "Placeholder — wire metrics-server / Prometheus for real load",
-        "align" => "left",
-        "offsetY" => 2,
-        "style" => %{"color" => "#737373", "fontSize" => "10px"}
-      }
+      "grid" => %{"padding" => %{"left" => 12, "right" => 8, "top" => 4, "bottom" => 28}}
     })
   end
 end

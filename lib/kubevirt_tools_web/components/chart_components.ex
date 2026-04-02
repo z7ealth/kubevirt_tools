@@ -7,18 +7,23 @@ defmodule KubevirtToolsWeb.ChartComponents do
   """
   use Phoenix.Component
 
+  import KubevirtToolsWeb.CoreComponents, only: [icon: 1]
+
   @doc """
   Renders a chart. **Required:** unique `id` (include a version suffix when data refreshes).
 
   - `opts` — ApexCharts options map (serializable with Jason).
   - `title` — optional card title above the chart.
   - `height` — fixed CSS height for the plot area so cards stay compact (default ~200px).
+  - `dependency_overlay` — when set, dims the plot and shows a daisyUI-style alert explaining
+    what must be installed or configured (e.g. Prometheus).
   """
   attr :id, :string, required: true
   attr :opts, :map, required: true
   attr :title, :string, default: nil
   attr :class, :any, default: nil
   attr :height, :string, default: "200px"
+  attr :dependency_overlay, :string, default: nil
 
   def apex_chart(assigns) do
     json = Jason.encode!(assigns.opts)
@@ -37,13 +42,40 @@ defmodule KubevirtToolsWeb.ChartComponents do
       >
         {@title}
       </h3>
-      <div
-        id={@id}
-        phx-hook=".ApexChart"
-        class="w-full min-w-0 min-h-0 shrink-0 apex-chart-canvas"
-        style={"height: #{@height};"}
-        data-chart-opts-b64={@opts_b64}
-      >
+      <div class="relative w-full min-w-0 shrink-0" style={"height: #{@height};"}>
+        <div
+          :if={@dependency_overlay}
+          class={[
+            "absolute inset-0 z-20 flex items-center justify-center p-2 rounded-md",
+            "bg-base-300/55 backdrop-blur-[3px]"
+          ]}
+        >
+          <div
+            role="alert"
+            class={[
+              "alert alert-warning shadow-lg max-h-full overflow-y-auto",
+              "py-2 px-3 gap-2 text-xs leading-snug max-w-[min(100%,20rem)]"
+            ]}
+          >
+            <.icon name="hero-puzzle-piece" class="size-5 shrink-0 opacity-90" />
+            <div>
+              <p class="font-semibold text-[0.7rem] uppercase tracking-wide text-warning-content/90">
+                Setup required
+              </p>
+              <p class="mt-0.5 text-warning-content/95">{@dependency_overlay}</p>
+            </div>
+          </div>
+        </div>
+        <div
+          id={@id}
+          phx-hook=".ApexChart"
+          class={[
+            "absolute inset-0 w-full min-w-0 apex-chart-canvas",
+            @dependency_overlay && "opacity-[0.18] pointer-events-none select-none"
+          ]}
+          data-chart-opts-b64={@opts_b64}
+        >
+        </div>
       </div>
     </section>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".ApexChart">
@@ -53,7 +85,12 @@ defmodule KubevirtToolsWeb.ChartComponents do
         const b64 = el.dataset.chartOptsB64
         if (!b64) return null
         try {
-          const json = atob(b64)
+          const binary = atob(b64)
+          const bytes = new Uint8Array(binary.length)
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i)
+          }
+          const json = new TextDecoder("utf-8").decode(bytes)
           return JSON.parse(json)
         } catch (e) {
           console.error("ApexChart: invalid chart opts", e)

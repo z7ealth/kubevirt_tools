@@ -4,9 +4,11 @@ defmodule KubevirtToolsWeb.DashboardLive do
   on_mount {KubevirtToolsWeb.AuthHooks, :require_kubeconfig}
 
   alias KubevirtTools.ClusterInventory
+  alias KubevirtTools.ClusterMetrics
   alias KubevirtTools.DashboardCharts
   alias KubevirtTools.KubeVirt
   alias KubevirtTools.KubeconfigStore
+  alias KubevirtTools.PrometheusSetup
 
   @impl true
   def mount(_params, _session, socket) do
@@ -140,6 +142,51 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     <.stat_tile label="Running VMIs" value={m.vmi_running} highlight={:success} />
                   </div>
 
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                    <%= if m.usage_cpu_overlay do %>
+                      <.usage_stat_placeholder
+                        id="dashboard-usage-cpu-setup"
+                        label="Node CPU usage"
+                        message={m.usage_cpu_overlay}
+                      />
+                    <% else %>
+                      <.stat_tile
+                        label="Node CPU usage"
+                        value={m.usage_cpu_value}
+                        sub={m.usage_cpu_sub}
+                        highlight={m.usage_cpu_highlight}
+                      />
+                    <% end %>
+                    <%= if m.usage_mem_overlay do %>
+                      <.usage_stat_placeholder
+                        id="dashboard-usage-mem-setup"
+                        label="Node memory usage"
+                        message={m.usage_mem_overlay}
+                      />
+                    <% else %>
+                      <.stat_tile
+                        label="Node memory usage"
+                        value={m.usage_mem_value}
+                        sub={m.usage_mem_sub}
+                        highlight={m.usage_mem_highlight}
+                      />
+                    <% end %>
+                    <%= if m.usage_storage_overlay do %>
+                      <.usage_stat_placeholder
+                        id="dashboard-usage-storage-setup"
+                        label="Cluster storage"
+                        message={m.usage_storage_overlay}
+                      />
+                    <% else %>
+                      <.stat_tile
+                        label="Cluster storage"
+                        value={m.usage_storage_value}
+                        sub={m.usage_storage_sub}
+                        highlight={m.usage_storage_highlight}
+                      />
+                    <% end %>
+                  </div>
+
                   <div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 md:gap-4 2xl:gap-5 min-w-0">
                     <.apex_chart
                       class="min-w-0"
@@ -184,7 +231,20 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       }
                     />
                     <.apex_chart
-                      class="min-w-0 md:col-span-2 2xl:col-span-1"
+                      class="min-w-0"
+                      id={"chart-nodes-scheduling-#{snap}"}
+                      title="Cluster nodes (scheduling)"
+                      height="200px"
+                      opts={
+                        DashboardCharts.node_scheduling_donut(
+                          m.nodes_schedulable,
+                          m.nodes_cordoned,
+                          m.nodes_not_ready
+                        )
+                      }
+                    />
+                    <.apex_chart
+                      class="min-w-0"
                       id={"chart-pvc-class-#{snap}"}
                       title="PVCs per storage class"
                       height="200px"
@@ -209,18 +269,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                         )
                       }
                     />
-                    <.apex_chart
-                      class="min-w-0"
-                      id={"chart-node-load-#{snap}"}
-                      title="Node distribution (placeholder)"
-                      height="220px"
-                      opts={
-                        DashboardCharts.node_load_placeholder(
-                          ["0–25%", "25–50%", "50–75%", "75–100%"],
-                          m.load_placeholder_buckets
-                        )
-                      }
-                    />
+                    <.node_load_chart_placeholder id={"node-load-chart-placeholder-#{snap}"} />
                     <.apex_chart
                       class="min-w-0"
                       id={"chart-health-#{snap}"}
@@ -327,6 +376,111 @@ defmodule KubevirtToolsWeb.DashboardLive do
     """
   end
 
+  attr :label, :string, required: true
+  attr :message, :string, required: true
+  attr :id, :string, default: nil
+
+  defp usage_stat_placeholder(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class="relative overflow-hidden rounded-xl border border-dashed border-warning/40 bg-base-200/25 min-h-[5.85rem]"
+    >
+      <div class="absolute inset-0 z-10 flex items-center justify-center p-2 sm:p-3">
+        <div
+          role="alert"
+          class={[
+            "alert alert-warning shadow-md max-h-full overflow-y-auto",
+            "py-2 px-3 gap-2 text-xs leading-snug max-w-[min(100%,18rem)] w-full"
+          ]}
+        >
+          <.icon name="hero-puzzle-piece" class="size-5 shrink-0 opacity-90" />
+          <div class="min-w-0">
+            <p class="text-[0.6rem] font-semibold uppercase tracking-wide text-warning-content/80">
+              {@label} — setup required
+            </p>
+            <p class="mt-1 text-warning-content/95">{@message}</p>
+          </div>
+        </div>
+      </div>
+      <div class="p-4 pt-11 space-y-2 pointer-events-none opacity-25">
+        <div class="skeleton h-3 w-24"></div>
+        <div class="skeleton h-8 w-16"></div>
+        <div class="skeleton h-3 w-32"></div>
+      </div>
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+
+  defp node_load_chart_placeholder(assigns) do
+    ~H"""
+    <section
+      id={@id}
+      class={[
+        "rounded-lg border border-dashed border-warning/45 bg-base-100/35 shadow-sm",
+        "p-3 min-w-0 w-full overflow-hidden flex flex-col gap-1.5"
+      ]}
+    >
+      <h3 class="text-xs font-semibold uppercase tracking-wide text-base-content/65 shrink-0 leading-tight">
+        Node load distribution
+      </h3>
+      <div class="relative w-full min-w-0 shrink-0 rounded-md overflow-hidden border border-base-300/40 bg-base-200/20">
+        <div class="h-[220px] w-full relative">
+          <div class={[
+            "absolute inset-0 z-10 flex items-center justify-center p-2 sm:p-3",
+            "bg-base-300/50 backdrop-blur-[2px]"
+          ]}>
+            <div
+              role="alert"
+              class={[
+                "alert alert-warning shadow-lg max-h-full overflow-y-auto",
+                "py-2.5 px-3 gap-2.5 text-xs leading-snug max-w-[min(100%,21rem)]"
+              ]}
+            >
+              <.icon name="hero-puzzle-piece" class="size-5 shrink-0 opacity-90" />
+              <div class="min-w-0">
+                <p class="font-semibold text-[0.65rem] uppercase tracking-wide text-warning-content/90">
+                  Placeholder — connect Prometheus
+                </p>
+                <p class="mt-1.5 text-warning-content/95">
+                  {node_load_chart_placeholder_message()}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="absolute inset-0 flex flex-col justify-center gap-3.5 px-3 py-4 pointer-events-none opacity-[0.22]">
+            <div class="flex items-center gap-2">
+              <div class="skeleton h-2.5 w-11 shrink-0"></div>
+              <div class="skeleton h-6 flex-1 rounded max-w-[92%]"></div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="skeleton h-2.5 w-11 shrink-0"></div>
+              <div class="skeleton h-6 flex-1 rounded max-w-[58%]"></div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="skeleton h-2.5 w-11 shrink-0"></div>
+              <div class="skeleton h-6 flex-1 rounded max-w-[76%]"></div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="skeleton h-2.5 w-11 shrink-0"></div>
+              <div class="skeleton h-6 flex-1 rounded max-w-[40%]"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    """
+  end
+
+  defp node_load_chart_placeholder_message do
+    join_prometheus_hint(
+      "This chart does not show live data yet. Deploy Prometheus (kube-prometheus-stack is a common choice) " <>
+        "and scrape kubelet / cAdvisor (and related targets) so per-node load can be charted here once this panel is wired to queries."
+    )
+  end
+
   attr :items, :list, required: true
   attr :empty_label, :string, required: true
   attr :id_prefix, :string, required: true
@@ -416,6 +570,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       {vmis, vmi_err} = safe_list(&KubeVirt.list_virtual_machine_instances/1, conn)
       {nodes, node_err} = safe_list(&ClusterInventory.list_nodes/1, conn)
       {pvcs, pvc_err} = safe_list(&ClusterInventory.list_pvcs/1, conn)
+      {node_metrics, metrics_err} = safe_list(&ClusterMetrics.list_node_metrics/1, conn)
 
       {:ok,
        %{
@@ -426,6 +581,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
            vmis: vmis,
            nodes: nodes,
            pvcs: pvcs,
+           node_metrics: node_metrics,
+           metrics_error: metrics_err,
            vm_error: vm_err,
            vmi_error: vmi_err,
            node_error: node_err,
@@ -474,7 +631,17 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
     nodes_total = length(nodes)
     nodes_ready = Enum.count(nodes, &node_ready?/1)
-    load_buckets = placeholder_load_buckets(nodes_total)
+    {nodes_schedulable, nodes_cordoned, nodes_not_ready} = node_scheduling_counts(nodes)
+
+    node_metrics = Map.get(data, :node_metrics) || []
+    metrics_err = Map.get(data, :metrics_error)
+    usage = ClusterMetrics.usage_summary(nodes, node_metrics, pvcs)
+    usage_cpu_overlay = usage_node_metric_overlay(usage.cpu, metrics_err)
+    usage_mem_overlay = usage_node_metric_overlay(usage.memory, metrics_err)
+    usage_storage_overlay = usage_storage_overlay_card(usage.storage)
+    {u_cpu_val, u_cpu_sub, u_cpu_hi} = usage_card_fields(usage.cpu)
+    {u_mem_val, u_mem_sub, u_mem_hi} = usage_card_fields(usage.memory)
+    {u_sto_val, u_sto_sub, u_sto_hi} = usage_card_fields(usage.storage)
 
     %{
       total_vms: length(vms),
@@ -483,6 +650,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
       other_vm: other,
       total_vcpus: Enum.sum(Map.values(vcpu_by_vmi(vmis))),
       nodes_ready: nodes_ready,
+      nodes_schedulable: nodes_schedulable,
+      nodes_cordoned: nodes_cordoned,
+      nodes_not_ready: nodes_not_ready,
       nodes_total: nodes_total,
       pvc_total: length(pvcs),
       node_labels: labels,
@@ -495,12 +665,144 @@ defmodule KubevirtToolsWeb.DashboardLive do
       pvc_other: pvc_other,
       pvc_class_labels: class_labels,
       pvc_class_series: class_series,
-      load_placeholder_buckets: load_buckets,
       vmi_running: vmi_run,
       vmi_not_running: vmi_not_run,
-      vmi_other_phase: vmi_other
+      vmi_other_phase: vmi_other,
+      usage_cpu_value: u_cpu_val,
+      usage_cpu_sub: u_cpu_sub,
+      usage_cpu_highlight: u_cpu_hi,
+      usage_mem_value: u_mem_val,
+      usage_mem_sub: u_mem_sub,
+      usage_mem_highlight: u_mem_hi,
+      usage_storage_value: u_sto_val,
+      usage_storage_sub: u_sto_sub,
+      usage_storage_highlight: u_sto_hi,
+      usage_cpu_overlay: usage_cpu_overlay,
+      usage_mem_overlay: usage_mem_overlay,
+      usage_storage_overlay: usage_storage_overlay
     }
   end
+
+  defp usage_node_metric_overlay({:ok, _, _}, _metrics_err), do: nil
+
+  defp usage_node_metric_overlay({:unavailable, _, hint}, metrics_err) do
+    case format_node_metrics_api_blocker(metrics_err) do
+      nil -> usage_node_metric_hint_sentence(hint)
+      msg -> msg
+    end
+  end
+
+  defp format_node_metrics_api_blocker(nil), do: nil
+
+  defp format_node_metrics_api_blocker({:error, reason}) do
+    format_node_metrics_api_blocker(reason)
+  end
+
+  defp format_node_metrics_api_blocker(%K8s.Client.APIError{reason: "Forbidden", message: msg})
+       when is_binary(msg) do
+    join_prometheus_hint(
+      "Set up Prometheus (including kubelet scraping and usually metrics-server for metrics.k8s.io); " <>
+        "your account also needs permission to list NodeMetrics. #{msg}"
+    )
+  end
+
+  defp format_node_metrics_api_blocker(%K8s.Client.APIError{reason: "NotFound", message: msg})
+       when is_binary(msg) do
+    join_prometheus_hint(
+      "metrics.k8s.io / NodeMetrics are not available—deploy Prometheus with a standard stack " <>
+        "(e.g. kube-prometheus-stack) that installs metrics-server and scrapes kubelets. #{msg}"
+    )
+  end
+
+  defp format_node_metrics_api_blocker(%K8s.Client.APIError{reason: reason, message: msg})
+       when is_binary(reason) and is_binary(msg) do
+    join_prometheus_hint("NodeMetrics could not be read (#{reason}): #{msg}")
+  end
+
+  defp format_node_metrics_api_blocker(%K8s.Client.APIError{} = e) do
+    join_prometheus_hint("NodeMetrics could not be read: #{Exception.message(e)}")
+  end
+
+  defp format_node_metrics_api_blocker(%K8s.Client.HTTPError{} = e) do
+    msg = Exception.message(e)
+
+    cond do
+      http_error_status?(msg, 404) ->
+        join_prometheus_hint(
+          "metrics.k8s.io / NodeMetrics are not reachable—deploy Prometheus with kube-prometheus-stack " <>
+            "(or similar) so metrics-server and scraping are in place. #{msg}"
+        )
+
+      http_error_status?(msg, 403) ->
+        join_prometheus_hint(
+          "Prometheus-style monitoring should expose NodeMetrics; your account needs permission to list them. #{msg}"
+        )
+
+      true ->
+        join_prometheus_hint("NodeMetrics could not be read: #{msg}")
+    end
+  end
+
+  defp format_node_metrics_api_blocker(other) do
+    join_prometheus_hint("NodeMetrics could not be read: #{inspect(other)}")
+  end
+
+  defp http_error_status?(message, code) when is_binary(message) and is_integer(code) do
+    m = String.downcase(message)
+    String.contains?(m, Integer.to_string(code)) or String.contains?(m, " #{code} ")
+  end
+
+  defp usage_node_metric_hint_sentence("Setup Prometheus (CPU)") do
+    join_prometheus_hint(
+      "Deploy Prometheus (typically via kube-prometheus-stack) so kubelet/cAdvisor and metrics.k8s.io feed NodeMetrics for CPU usage."
+    )
+  end
+
+  defp usage_node_metric_hint_sentence("Setup Prometheus (memory)") do
+    join_prometheus_hint(
+      "Deploy Prometheus (typically via kube-prometheus-stack) so kubelet/cAdvisor and metrics.k8s.io feed NodeMetrics for memory usage."
+    )
+  end
+
+  defp usage_node_metric_hint_sentence("Install metrics-server (CPU)"),
+    do: usage_node_metric_hint_sentence("Setup Prometheus (CPU)")
+
+  defp usage_node_metric_hint_sentence("Install metrics-server (memory)"),
+    do: usage_node_metric_hint_sentence("Setup Prometheus (memory)")
+
+  defp usage_node_metric_hint_sentence("CPU: could not match nodes to metrics") do
+    join_prometheus_hint(
+      "NodeMetrics exist but could not be matched to your nodes—check Prometheus scrape config, node names, and RBAC."
+    )
+  end
+
+  defp usage_node_metric_hint_sentence("Memory: could not match nodes to metrics") do
+    join_prometheus_hint(
+      "NodeMetrics exist but could not be matched to your nodes—check Prometheus scrape config, node names, and RBAC."
+    )
+  end
+
+  defp usage_node_metric_hint_sentence(other) when is_binary(other) do
+    join_prometheus_hint(other)
+  end
+
+  defp usage_storage_overlay_card({:ok, _, _}), do: nil
+
+  defp usage_storage_overlay_card({:unavailable, _, hint}) do
+    join_prometheus_hint(
+      "This card needs PVC storage requests and/or node allocatable ephemeral-storage. (#{hint}) " <>
+        "Use Prometheus to scrape storage- and kubelet-related metrics for richer dashboards."
+    )
+  end
+
+  defp join_prometheus_hint(primary) when is_binary(primary) do
+    String.trim_trailing(primary) <> " " <> PrometheusSetup.endpoint_env_hint()
+  end
+
+  defp usage_card_fields({:ok, value, sub}),
+    do: {value, sub, ClusterMetrics.highlight_for_usage({:ok, value, sub})}
+
+  defp usage_card_fields({:unavailable, value, sub}), do: {value, sub, :neutral}
 
   defp vm_status_counts(vms) do
     Enum.reduce(vms, {0, 0, 0}, fn vm, {r, s, o} ->
@@ -639,10 +941,27 @@ defmodule KubevirtToolsWeb.DashboardLive do
     end)
   end
 
-  defp placeholder_load_buckets(0), do: [0, 0, 0, 0]
-  defp placeholder_load_buckets(n) when n <= 2, do: [n, 0, 0, 0]
-  defp placeholder_load_buckets(n) when n <= 4, do: [div(n, 2), n - div(n, 2), 0, 0]
-  defp placeholder_load_buckets(n), do: [div(n, 4), div(n, 4), div(n, 4), n - 3 * div(n, 4)]
+  defp node_cordoned?(node) do
+    get_in(node, ["spec", "unschedulable"]) == true
+  end
+
+  defp node_scheduling_counts(nodes) do
+    Enum.reduce(nodes, {0, 0, 0}, fn node, {sched, cord, down} ->
+      ready = node_ready?(node)
+      cordoned = node_cordoned?(node)
+
+      cond do
+        not ready ->
+          {sched, cord, down + 1}
+
+        ready and cordoned ->
+          {sched, cord + 1, down}
+
+        true ->
+          {sched + 1, cord, down}
+      end
+    end)
+  end
 
   defp vm_error_text(%K8s.Client.HTTPError{message: m}) when is_binary(m), do: m
   defp vm_error_text(%{message: m}) when is_binary(m), do: m
