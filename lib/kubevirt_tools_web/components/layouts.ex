@@ -74,10 +74,8 @@ defmodule KubevirtToolsWeb.Layouts do
       </div>
     </header>
 
-    <main class="px-4 py-12 sm:px-6 lg:px-8 min-h-[calc(100vh-5rem)]">
-      <div class="mx-auto max-w-6xl space-y-4">
-        {render_slot(@inner_block)}
-      </div>
+    <main class="min-w-0 space-y-4 px-4 py-10 sm:px-8 lg:px-14 min-h-[calc(100vh-5rem)] overflow-x-hidden">
+      {render_slot(@inner_block)}
     </main>
 
     <.flash_group flash={@flash} />

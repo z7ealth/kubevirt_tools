@@ -28,10 +28,10 @@ defmodule KubevirtTools.DashboardCharts do
         "borderColor" => "rgba(255,255,255,0.08)",
         "strokeDashArray" => 4,
         "padding" => %{
-          "left" => 16,
-          "right" => 20,
-          "top" => 12,
-          "bottom" => 12
+          "left" => 8,
+          "right" => 8,
+          "top" => 6,
+          "bottom" => 6
         },
         "xaxis" => %{"lines" => %{"show" => true}},
         "yaxis" => %{"lines" => %{"show" => false}}
@@ -47,11 +47,11 @@ defmodule KubevirtTools.DashboardCharts do
       "position" => "bottom",
       "horizontalAlign" => "center",
       "floating" => false,
-      "offsetY" => 4,
-      "height" => 52,
-      "fontSize" => "11px",
-      "itemMargin" => %{"horizontal" => 10, "vertical" => 3},
-      "markers" => %{"width" => 8, "height" => 8, "radius" => 2},
+      "offsetY" => 0,
+      "height" => 36,
+      "fontSize" => "10px",
+      "itemMargin" => %{"horizontal" => 6, "vertical" => 2},
+      "markers" => %{"width" => 6, "height" => 6, "radius" => 2},
       "labels" => %{"colors" => "#a3a3a3"}
     }
   end
@@ -97,44 +97,45 @@ defmodule KubevirtTools.DashboardCharts do
       end
 
     chart_with_opts(%{
-      "chart" => %{"type" => "donut"},
+      "chart" => %{"type" => "donut", "height" => 200},
       "series" => series,
       "labels" => labels,
       "colors" => colors,
       "legend" => %{
         "position" => "bottom",
         "horizontalAlign" => "center",
-        "offsetY" => 2,
-        "height" => 56,
-        "itemMargin" => %{"horizontal" => 8, "vertical" => 4}
+        "offsetY" => 0,
+        "height" => 38,
+        "fontSize" => "10px",
+        "itemMargin" => %{"horizontal" => 6, "vertical" => 2}
       },
       "plotOptions" => %{
         "pie" => %{
           "donut" => %{
-            "size" => "58%",
+            "size" => "72%",
             "labels" => %{
               "show" => true,
-              "name" => %{"show" => true},
-              "value" => %{"show" => true}
+              "name" => %{"show" => true, "fontSize" => "11px"},
+              "value" => %{"show" => true, "fontSize" => "11px"}
             }
           }
         }
       },
       "stroke" => %{"width" => 0},
-      "grid" => %{"padding" => %{"bottom" => 8, "top" => 4}}
+      "grid" => %{"padding" => %{"bottom" => 4, "top" => 2}}
     })
   end
 
   def vms_per_node_bar(labels, counts) when is_list(labels) and is_list(counts) do
     chart_with_opts(%{
-      "chart" => %{"type" => "bar", "height" => 280},
+      "chart" => %{"type" => "bar", "height" => 200},
       "series" => [%{"name" => "VMIs", "data" => counts}],
       "xaxis" => %{
         "categories" => labels,
         "labels" => %{
           "rotate" => -35,
           "rotateAlways" => false,
-          "maxHeight" => 72,
+          "maxHeight" => 48,
           "trim" => true,
           "style" => %{"colors" => "#a3a3a3", "fontSize" => "11px"}
         }
@@ -145,9 +146,9 @@ defmodule KubevirtTools.DashboardCharts do
         "labels" => %{"style" => %{"colors" => "#a3a3a3", "fontSize" => "11px"}}
       },
       "colors" => [@colors.blue],
-      "plotOptions" => %{"bar" => %{"borderRadius" => 4, "columnWidth" => "58%"}},
+      "plotOptions" => %{"bar" => %{"borderRadius" => 3, "columnWidth" => "55%"}},
       "legend" => %{"show" => false},
-      "grid" => %{"padding" => %{"bottom" => 20, "left" => 8, "right" => 8}}
+      "grid" => %{"padding" => %{"bottom" => 8, "left" => 4, "right" => 4, "top" => 4}}
     })
   end
 
@@ -155,10 +156,10 @@ defmodule KubevirtTools.DashboardCharts do
     color = color || @colors.red
 
     chart_with_opts(%{
-      "chart" => %{"type" => "bar", "height" => 280},
+      "chart" => %{"type" => "bar", "height" => 200},
       "series" => [%{"name" => title, "data" => values}],
       "plotOptions" => %{
-        "bar" => %{"horizontal" => true, "borderRadius" => 4, "barHeight" => "65%"}
+        "bar" => %{"horizontal" => true, "borderRadius" => 3, "barHeight" => "75%"}
       },
       "xaxis" => %{
         "categories" => categories,
@@ -172,7 +173,7 @@ defmodule KubevirtTools.DashboardCharts do
       },
       "colors" => [color],
       "legend" => %{"show" => false},
-      "grid" => %{"padding" => %{"left" => 28, "right" => 20, "top" => 10, "bottom" => 14}}
+      "grid" => %{"padding" => %{"left" => 12, "right" => 8, "top" => 4, "bottom" => 6}}
     })
   end
 
@@ -193,20 +194,21 @@ defmodule KubevirtTools.DashboardCharts do
       end
 
     chart_with_opts(%{
-      "chart" => %{"type" => "pie"},
+      "chart" => %{"type" => "pie", "height" => 200},
       "series" => series,
       "labels" => labels,
       "colors" => pie_colors,
       "legend" => %{
         "position" => "bottom",
         "horizontalAlign" => "center",
-        "offsetY" => 4,
-        "height" => 52,
-        "itemMargin" => %{"horizontal" => 8, "vertical" => 3}
+        "offsetY" => 0,
+        "height" => 36,
+        "fontSize" => "10px",
+        "itemMargin" => %{"horizontal" => 6, "vertical" => 2}
       },
       "stroke" => %{"width" => 0},
       "plotOptions" => %{"pie" => %{"expandOnClick" => false}},
-      "grid" => %{"padding" => %{"bottom" => 6, "top" => 4}}
+      "grid" => %{"padding" => %{"bottom" => 4, "top" => 2}}
     })
   end
 
@@ -222,33 +224,34 @@ defmodule KubevirtTools.DashboardCharts do
       end
 
     chart_with_opts(%{
-      "chart" => %{"type" => "donut"},
+      "chart" => %{"type" => "donut", "height" => 200},
       "series" => series,
       "labels" => labels,
       "colors" => colors,
       "legend" => %{
         "position" => "bottom",
         "horizontalAlign" => "center",
-        "offsetY" => 2,
-        "height" => 58,
-        "itemMargin" => %{"horizontal" => 6, "vertical" => 4}
+        "offsetY" => 0,
+        "height" => 40,
+        "fontSize" => "10px",
+        "itemMargin" => %{"horizontal" => 5, "vertical" => 2}
       },
       "plotOptions" => %{
         "pie" => %{
-          "donut" => %{"size" => "56%"}
+          "donut" => %{"size" => "70%"}
         }
       },
       "stroke" => %{"width" => 0},
-      "grid" => %{"padding" => %{"bottom" => 8, "top" => 4}}
+      "grid" => %{"padding" => %{"bottom" => 4, "top" => 2}}
     })
   end
 
   def node_load_placeholder(categories, values) do
     chart_with_opts(%{
-      "chart" => %{"type" => "bar", "height" => 280},
+      "chart" => %{"type" => "bar", "height" => 220},
       "series" => [%{"name" => "Nodes", "data" => values}],
       "plotOptions" => %{
-        "bar" => %{"horizontal" => true, "borderRadius" => 4, "barHeight" => "65%"}
+        "bar" => %{"horizontal" => true, "borderRadius" => 3, "barHeight" => "72%"}
       },
       "xaxis" => %{
         "categories" => categories,
@@ -259,12 +262,12 @@ defmodule KubevirtTools.DashboardCharts do
       },
       "colors" => [@colors.violet],
       "legend" => %{"show" => false},
-      "grid" => %{"padding" => %{"left" => 28, "right" => 20, "top" => 8, "bottom" => 36}},
+      "grid" => %{"padding" => %{"left" => 12, "right" => 8, "top" => 4, "bottom" => 28}},
       "subtitle" => %{
         "text" => "Placeholder — wire metrics-server / Prometheus for real load",
         "align" => "left",
-        "offsetY" => 6,
-        "style" => %{"color" => "#737373", "fontSize" => "11px"}
+        "offsetY" => 2,
+        "style" => %{"color" => "#737373", "fontSize" => "10px"}
       }
     })
   end

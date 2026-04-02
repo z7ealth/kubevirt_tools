@@ -12,13 +12,13 @@ defmodule KubevirtToolsWeb.ChartComponents do
 
   - `opts` — ApexCharts options map (serializable with Jason).
   - `title` — optional card title above the chart.
-  - `height` — CSS min-height for the chart area (default ~280px).
+  - `height` — fixed CSS height for the plot area so cards stay compact (default ~200px).
   """
   attr :id, :string, required: true
   attr :opts, :map, required: true
   attr :title, :string, default: nil
   attr :class, :any, default: nil
-  attr :height, :string, default: "280px"
+  attr :height, :string, default: "200px"
 
   def apex_chart(assigns) do
     json = Jason.encode!(assigns.opts)
@@ -27,18 +27,21 @@ defmodule KubevirtToolsWeb.ChartComponents do
 
     ~H"""
     <section class={[
-      "rounded-xl border border-base-300/70 bg-base-200/30 shadow-sm",
-      "p-4 sm:p-5 min-w-0 w-full overflow-hidden flex flex-col gap-1",
+      "rounded-lg border border-base-300/70 bg-base-100/40 shadow-sm",
+      "p-3 min-w-0 w-full overflow-hidden flex flex-col gap-1.5",
       @class
     ]}>
-      <h3 :if={@title} class="text-sm font-medium text-base-content/80 shrink-0 pr-1 leading-snug">
+      <h3
+        :if={@title}
+        class="text-xs font-semibold uppercase tracking-wide text-base-content/65 shrink-0 leading-tight"
+      >
         {@title}
       </h3>
       <div
         id={@id}
         phx-hook=".ApexChart"
-        class="w-full min-w-0 min-h-0 flex-1 apex-chart-canvas"
-        style={"min-height: #{@height};"}
+        class="w-full min-w-0 min-h-0 shrink-0 apex-chart-canvas"
+        style={"height: #{@height};"}
         data-chart-opts-b64={@opts_b64}
       >
       </div>

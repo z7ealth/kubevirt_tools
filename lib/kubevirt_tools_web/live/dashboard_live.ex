@@ -46,7 +46,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="space-y-6 -mt-4">
+      <div class="space-y-6 -mt-4 max-w-full min-w-0">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-base-300/60 pb-4">
           <div>
             <p class="text-xs font-medium uppercase tracking-wider text-primary/90">Overview</p>
@@ -126,7 +126,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     </span>
                   </div>
 
-                  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+                  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7 gap-2 sm:gap-3">
                     <.stat_tile label="Total VMs" value={m.total_vms} highlight={:neutral} />
                     <.stat_tile label="Running" value={m.running} highlight={:success} />
                     <.stat_tile label="Stopped" value={m.stopped} highlight={:danger} />
@@ -140,25 +140,26 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     <.stat_tile label="Running VMIs" value={m.vmi_running} highlight={:success} />
                   </div>
 
-                  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 xl:gap-6">
+                  <div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 md:gap-4 2xl:gap-5 min-w-0">
                     <.apex_chart
                       class="min-w-0"
                       id={"chart-vm-status-#{snap}"}
                       title="VMs by status"
+                      height="200px"
                       opts={DashboardCharts.vm_status_donut(m.running, m.stopped, m.other_vm)}
                     />
                     <.apex_chart
                       class="min-w-0"
                       id={"chart-vm-per-node-#{snap}"}
                       title="VMIs per node"
-                      height="300px"
+                      height="200px"
                       opts={DashboardCharts.vms_per_node_bar(m.node_labels, m.node_vm_counts)}
                     />
                     <.apex_chart
                       class="min-w-0"
                       id={"chart-vcpu-node-#{snap}"}
                       title="vCPU per node (VMIs)"
-                      height="300px"
+                      height="200px"
                       opts={
                         DashboardCharts.horizontal_bar(
                           "vCPUs",
@@ -172,7 +173,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       class="min-w-0"
                       id={"chart-mem-node-#{snap}"}
                       title="Memory per node (MiB, guest)"
-                      height="300px"
+                      height="200px"
                       opts={
                         DashboardCharts.horizontal_bar(
                           "MiB",
@@ -183,20 +184,22 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       }
                     />
                     <.apex_chart
-                      class="min-w-0 md:col-span-2 xl:col-span-1"
+                      class="min-w-0 md:col-span-2 2xl:col-span-1"
                       id={"chart-pvc-class-#{snap}"}
                       title="PVCs per storage class"
+                      height="200px"
                       opts={
                         DashboardCharts.pvc_storage_class_pie(m.pvc_class_labels, m.pvc_class_series)
                       }
                     />
                   </div>
 
-                  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 xl:gap-6">
+                  <div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 md:gap-4 2xl:gap-5 min-w-0">
                     <.apex_chart
                       class="min-w-0"
                       id={"chart-pvc-status-#{snap}"}
                       title="PVC status"
+                      height="200px"
                       opts={
                         DashboardCharts.pvc_status_donut(
                           m.pvc_bound,
@@ -210,7 +213,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       class="min-w-0"
                       id={"chart-node-load-#{snap}"}
                       title="Node distribution (placeholder)"
-                      height="320px"
+                      height="220px"
                       opts={
                         DashboardCharts.node_load_placeholder(
                           ["0–25%", "25–50%", "50–75%", "75–100%"],
@@ -222,6 +225,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       class="min-w-0"
                       id={"chart-health-#{snap}"}
                       title="VMI phases"
+                      height="200px"
                       opts={
                         DashboardCharts.vm_status_donut(
                           m.vmi_running,
