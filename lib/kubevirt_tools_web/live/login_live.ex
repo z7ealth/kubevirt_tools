@@ -45,7 +45,8 @@ defmodule KubevirtToolsWeb.LoginLive do
               Kubeconfig file
             </label>
             <p class="text-xs text-base-content/55 mb-2">
-              Default location is often <code class="px-1 rounded bg-base-200 font-mono text-[0.8rem]">.kube/config</code>
+              Default location is often
+              <code class="px-1 rounded bg-base-200 font-mono text-[0.8rem]">.kube/config</code>
               (no extension). Use “All files” in the file dialog if your browser filters the list.
             </p>
             <input
