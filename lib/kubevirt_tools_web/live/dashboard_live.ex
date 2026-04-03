@@ -441,18 +441,24 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       <div>
                         <label
                           for="vm-topology-layout"
-                          class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50 block mb-1.5"
+                          class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50 block mb-1.5 text-center"
                         >
                           Layout
                         </label>
-                        <select
-                          id="vm-topology-layout"
-                          data-topology-layout
-                          class="select select-bordered select-sm w-full text-sm bg-base-100/80"
-                        >
-                          <option value="organic">Organic</option>
-                          <option value="hierarchical">Hierarchical</option>
-                        </select>
+                        <%!-- DaisyUI .select styles inner `select` via `.select select`; wrapper fixes vertical alignment. --%>
+                        <div class={[
+                          "select select-primary select-bordered select-sm w-full",
+                          "transition-colors duration-200"
+                        ]}>
+                          <select
+                            id="vm-topology-layout"
+                            data-topology-layout
+                            class="w-full text-center text-sm font-medium"
+                          >
+                            <option value="organic">Organic</option>
+                            <option value="hierarchical">Hierarchical</option>
+                          </select>
+                        </div>
                       </div>
                       <div>
                         <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50 mb-2">

@@ -55,14 +55,7 @@ defmodule KubevirtTools.VmTopology do
               if n in [nil, ""], do: nil, else: n
           end
 
-        phase = vm |> vm_phase() |> to_string() |> String.downcase()
-
-        vm_status =
-          cond do
-            phase == "running" -> "running"
-            phase in ["stopped", "stopping", "terminated", "terminating"] -> "stopped"
-            true -> "other"
-          end
+        vm_status = topology_vm_status(vm, vmi)
 
         %{
           "id" => "vm:" <> key,
@@ -130,7 +123,7 @@ defmodule KubevirtTools.VmTopology do
 
     vm_nodes_only = Enum.map(vm_vertices, &Map.delete(&1, "host"))
 
-    {running, stopped, other} = vm_status_counts(vms)
+    {running, stopped, other} = summary_counts_from_vm_statuses(vm_vertices)
 
     %{
       "nodes" => graph_nodes ++ vm_nodes_only,
@@ -153,8 +146,97 @@ defmodule KubevirtTools.VmTopology do
 
   defp vm_name(item), do: get_in(item, ["metadata", "name"]) || "—"
 
-  defp vm_phase(item) do
-    get_in(item, ["status", "printableStatus"]) || "—"
+  # Printable-only phases that mean "still working toward run" — not powered off.
+  @transient_printable ~w(
+    starting provisioning scheduling migrating pausing paused running
+  )
+
+  defp topology_vm_status(vm, vmi) do
+    printable = vm_printable_lower(vm)
+    vmi_running = vmi_phase_running?(vmi)
+
+    cond do
+      vmi_running ->
+        "running"
+
+      printable in ["stopped", "stopping", "terminated", "terminating"] ->
+        "stopped"
+
+      String.contains?(printable, "stop") ->
+        "stopped"
+
+      printable == "running" and not vmi_running ->
+        "other"
+
+      errorish_printable?(printable) ->
+        "other"
+
+      is_nil(vmi) ->
+        if transient_printable?(printable) or String.starts_with?(printable, "wait"),
+          do: "other",
+          else: "stopped"
+
+      true ->
+        topology_vm_status_with_vmi(vmi, printable)
+    end
+  end
+
+  defp vm_printable_lower(vm) do
+    case get_in(vm, ["status", "printableStatus"]) do
+      nil ->
+        ""
+
+      s ->
+        s |> to_string() |> String.trim() |> String.downcase()
+    end
+  end
+
+  defp vmi_phase_running?(nil), do: false
+
+  defp vmi_phase_running?(vmi) do
+    String.downcase(to_string(get_in(vmi, ["status", "phase"]) || "")) == "running"
+  end
+
+  defp errorish_printable?(printable) do
+    String.contains?(printable, "error") or String.contains?(printable, "fail") or
+      String.contains?(printable, "crash")
+  end
+
+  defp transient_printable?(printable) do
+    printable in @transient_printable or
+      String.contains?(printable, "wait") or
+      String.contains?(printable, "migrat")
+  end
+
+  defp topology_vm_status_with_vmi(vmi, printable) do
+    phase = String.downcase(to_string(get_in(vmi, ["status", "phase"]) || ""))
+
+    cond do
+      phase in ["pending", "scheduling", "scheduled"] ->
+        "other"
+
+      phase in ["failed", "succeeded"] ->
+        "stopped"
+
+      printable in ["stopped", "stopping", "terminated", "terminating"] ->
+        "stopped"
+
+      String.contains?(printable, "stop") ->
+        "stopped"
+
+      true ->
+        "other"
+    end
+  end
+
+  defp summary_counts_from_vm_statuses(vm_vertices) do
+    Enum.reduce(vm_vertices, {0, 0, 0}, fn v, {r, s, o} ->
+      case v["vmStatus"] do
+        "running" -> {r + 1, s, o}
+        "stopped" -> {r, s + 1, o}
+        _ -> {r, s, o + 1}
+      end
+    end)
   end
 
   defp vmi_node_name(item) do
@@ -171,15 +253,5 @@ defmodule KubevirtTools.VmTopology do
 
   defp node_cordoned?(node) do
     get_in(node, ["spec", "unschedulable"]) == true
-  end
-
-  defp vm_status_counts(vms) do
-    Enum.reduce(vms, {0, 0, 0}, fn vm, {r, s, o} ->
-      case String.downcase(to_string(vm_phase(vm))) do
-        "running" -> {r + 1, s, o}
-        "stopped" -> {r, s + 1, o}
-        _ -> {r, s, o + 1}
-      end
-    end)
   end
 end

@@ -43,6 +43,42 @@ defmodule KubevirtTools.VmTopologyTest do
     assert unsched["hostStatus"] == "unscheduled"
   end
 
+  test "build/1 treats VM without VMI and no printable as stopped (Unscheduled soft red)" do
+    data = %{
+      nodes: [%{"metadata" => %{"name" => "node-a"}}],
+      vms: [
+        %{"metadata" => %{"namespace" => "ns", "name" => "fedora-vm"}}
+      ],
+      vmis: []
+    }
+
+    topo = VmTopology.build(data)
+    v = Enum.find(topo["nodes"], &(&1["id"] == "vm:ns/fedora-vm"))
+    assert v["vmStatus"] == "stopped"
+
+    assert Enum.any?(
+             topo["edges"],
+             &(&1["from"] == "host:__unscheduled__" and &1["to"] == "vm:ns/fedora-vm")
+           )
+  end
+
+  test "build/1 keeps provisioning without VMI as other" do
+    data = %{
+      nodes: [],
+      vms: [
+        %{
+          "metadata" => %{"namespace" => "ns", "name" => "v"},
+          "status" => %{"printableStatus" => "Provisioning"}
+        }
+      ],
+      vmis: []
+    }
+
+    topo = VmTopology.build(data)
+    v = Enum.find(topo["nodes"], &(&1["id"] == "vm:ns/v"))
+    assert v["vmStatus"] == "other"
+  end
+
   test "build/1 maps stopping-like printableStatus to vm stopped" do
     data = %{
       nodes: [],
