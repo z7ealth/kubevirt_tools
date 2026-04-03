@@ -42,6 +42,7 @@ defmodule KubevirtToolsWeb.CoreComponents do
   attr :flash, :map, default: %{}, doc: "the map of flash messages to display"
   attr :title, :string, default: nil
   attr :kind, :atom, values: [:info, :error], doc: "used for styling and flash lookup"
+  attr :auto_dismiss, :boolean, default: true, doc: "clear flash when the progress animation ends"
   attr :rest, :global, doc: "the arbitrary HTML attributes to add to the flash container"
 
   slot :inner_block, doc: "the optional inner block that renders the flash message"
@@ -50,31 +51,89 @@ defmodule KubevirtToolsWeb.CoreComponents do
     assigns = assign_new(assigns, :id, fn -> "flash-#{assigns.kind}" end)
 
     ~H"""
-    <div
-      :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
-      id={@id}
-      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
-      role="alert"
-      class="toast toast-top toast-end z-50"
-      {@rest}
-    >
-      <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
-      ]}>
-        <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
-        <div>
-          <p :if={@title} class="font-semibold">{@title}</p>
-          <p>{msg}</p>
+    <%= if msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind) do %>
+      <div
+        id={@id}
+        phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
+        phx-hook=".FlashAutoDismiss"
+        data-flash-kind={if(@auto_dismiss, do: to_string(@kind))}
+        role="alert"
+        class="toast toast-top toast-end z-50"
+        {@rest}
+      >
+        <div class="relative w-80 sm:w-96 max-w-80 sm:max-w-96 overflow-hidden rounded-box border border-base-300/80 bg-base-100 text-base-content shadow-lg">
+          <div class="flex items-start gap-3 p-4 pr-2 text-wrap">
+            <.icon
+              :if={@kind == :info}
+              name="hero-information-circle"
+              class="size-5 shrink-0 text-info"
+            />
+            <.icon
+              :if={@kind == :error}
+              name="hero-exclamation-circle"
+              class="size-5 shrink-0 text-error"
+            />
+            <div class="min-w-0 flex-1">
+              <p :if={@title} class="font-semibold">{@title}</p>
+              <p>{msg}</p>
+            </div>
+            <button type="button" class="group shrink-0 cursor-pointer" aria-label="close">
+              <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+            </button>
+          </div>
+          <div
+            :if={@auto_dismiss}
+            class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-base-300/50"
+            aria-hidden="true"
+          >
+            <div class="flash-progress-bar-fill h-full w-full bg-primary" />
+          </div>
         </div>
-        <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label="close">
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
-        </button>
       </div>
-    </div>
+      <script :if={@auto_dismiss} :type={Phoenix.LiveView.ColocatedHook} name=".FlashAutoDismiss">
+        export default {
+          mounted() {
+            const bar = this.el.querySelector(".flash-progress-bar-fill")
+            const kind = this.el.dataset.flashKind
+            if (!bar || !kind) return
+
+            this._dismissed = false
+            const dismiss = () => {
+              if (this._dismissed) return
+              this._dismissed = true
+              if (this._timer) window.clearTimeout(this._timer)
+              this._timer = null
+              this.pushEvent("lv:clear-flash", { key: kind })
+              this.js().hide(this.el)
+            }
+
+            /* Must match `flash-progress-bar` duration in app.css (6s). */
+            const durationMs = 6000
+
+            this._onAnimationEnd = (e) => {
+              if (e.target !== bar) return
+              if (e.animationName && e.animationName !== "flash-progress-bar") return
+              dismiss()
+            }
+
+            const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            if (reduced) {
+              this._timer = window.setTimeout(dismiss, durationMs)
+            } else {
+              bar.addEventListener("animationend", this._onAnimationEnd)
+              this._timer = window.setTimeout(dismiss, durationMs)
+            }
+          },
+          destroyed() {
+            if (this._timer) window.clearTimeout(this._timer)
+            const bar = this.el.querySelector(".flash-progress-bar-fill")
+            if (bar && this._onAnimationEnd) {
+              bar.removeEventListener("animationend", this._onAnimationEnd)
+            }
+          }
+        }
+      </script>
+    <% end %>
     """
   end
 

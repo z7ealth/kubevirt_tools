@@ -295,13 +295,14 @@ defmodule KubevirtTools.ClusterMetrics do
     end
   end
 
+  # Usage tiles: primary < 80%, warning 80–91%, danger >= 92%.
   @doc false
   def highlight_for_usage({:ok, value, _sub}) when is_binary(value) do
     if String.ends_with?(value, "%") do
       case Integer.parse(String.trim_trailing(value, "%")) do
         {p, _} when p >= 92 -> :danger
         {p, _} when p >= 80 -> :warning
-        _ -> :neutral
+        _ -> :primary
       end
     else
       :neutral

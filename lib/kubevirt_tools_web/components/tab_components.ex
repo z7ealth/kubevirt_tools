@@ -18,57 +18,62 @@ defmodule KubevirtToolsWeb.TabComponents do
   `tabs` is a list of maps: `%{id: atom | String.t(), label: String.t(), optional: :disabled => boolean}`.
 
   Optional `variant`: `:box` (default), `:lift`, `:border` — maps to DaisyUI `tabs-box`, `tabs-lift`, `tabs-border`.
+
+  Optional `active_style`: `:default` (Daisy `tab-active` fill) or `:outline_primary` (`btn-outline btn-primary` on active).
   """
   attr :id, :string, required: true, doc: "Stable id prefix for tab buttons and panels"
   attr :active, :atom, required: true, doc: "Currently selected tab id (atom)"
   attr :tabs, :list, required: true, doc: "List of tab definition maps"
   attr :event, :string, default: "set_tab", doc: "LiveView event name for enabled tabs"
   attr :variant, :atom, default: :box, values: [:box, :lift, :border]
+  attr :active_style, :atom, default: :default, values: [:default, :outline_primary]
   attr :class, :any, default: nil
 
   def daisy_tabs(assigns) do
+    outline? = assigns.active_style == :outline_primary
+
     variant_class =
-      case assigns.variant do
-        :box -> "tabs-box"
-        :lift -> "tabs-lift"
-        :border -> "tabs-border"
+      if outline? do
+        nil
+      else
+        case assigns.variant do
+          :box -> "tabs-box"
+          :lift -> "tabs-lift"
+          :border -> "tabs-border"
+        end
       end
 
-    assigns = assign(assigns, :variant_class, variant_class)
+    assigns =
+      assigns
+      |> assign(:outline_primary?, outline?)
+      |> assign(:variant_class, variant_class)
 
     ~H"""
     <div
       role="tablist"
-      class={[
-        "tabs",
-        @variant_class,
-        "w-full",
-        "flex-wrap",
-        "sm:flex-nowrap",
-        "gap-0.5",
-        @class
-      ]}
+      class={
+        if @outline_primary? do
+          ["flex flex-wrap items-center gap-1.5 sm:gap-2", @class]
+        else
+          ["tabs", @variant_class, "w-full", "flex-wrap", "sm:flex-nowrap", "gap-0.5", @class]
+        end
+      }
       id={@id}
     >
       <%= for t <- @tabs do %>
         <% disabled = Map.get(t, :disabled, false) %>
         <% tid = tab_id_string(t.id) %>
+        <% active = @active == t.id %>
         <button
           type="button"
           role="tab"
           id={"#{@id}-tab-#{tid}"}
-          aria-selected={@active == t.id}
+          aria-selected={active}
           aria-controls={"#{@id}-panel-#{tid}"}
           phx-click={unless disabled, do: @event}
           phx-value-tab={tid}
           disabled={disabled}
-          class={[
-            "tab",
-            "shrink-0",
-            "whitespace-nowrap",
-            @active == t.id && "tab-active",
-            disabled && "tab-disabled"
-          ]}
+          class={tab_trigger_classes(active, disabled, @outline_primary?)}
         >
           {t.label}
         </button>
@@ -76,6 +81,33 @@ defmodule KubevirtToolsWeb.TabComponents do
     </div>
     """
   end
+
+  defp tab_trigger_classes(_active, true, true),
+    do: [
+      "btn btn-sm shrink-0 whitespace-nowrap btn-ghost btn-disabled opacity-40 cursor-not-allowed"
+    ]
+
+  defp tab_trigger_classes(true, false, true),
+    do: ["btn btn-sm shrink-0 whitespace-nowrap btn-outline btn-primary"]
+
+  defp tab_trigger_classes(false, false, true),
+    do: [
+      "btn btn-sm shrink-0 whitespace-nowrap btn-ghost",
+      "text-base-content/65 hover:text-base-content",
+      "hover:bg-base-200/60 transition-colors"
+    ]
+
+  defp tab_trigger_classes(true, false, false),
+    do: ["tab shrink-0 whitespace-nowrap tab-active"]
+
+  defp tab_trigger_classes(false, false, false),
+    do: ["tab shrink-0 whitespace-nowrap"]
+
+  defp tab_trigger_classes(true, true, false),
+    do: ["tab shrink-0 whitespace-nowrap tab-active tab-disabled"]
+
+  defp tab_trigger_classes(false, true, false),
+    do: ["tab shrink-0 whitespace-nowrap tab-disabled"]
 
   @doc """
   One tabpanel; show with `active == tab`. Links `aria-labelledby` to the matching `daisy_tabs` button.

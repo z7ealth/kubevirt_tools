@@ -19,7 +19,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     socket =
       socket
       |> assign(:page_title, "Dashboard")
-      |> assign(:current_scope, %{label: "Cluster session"})
+      |> assign(:current_scope, %{})
       |> assign(:active_tab, :dashboard)
       |> assign(:prometheus_live, nil)
 
@@ -72,9 +72,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-base-300/60 pb-4">
           <div>
             <p class="text-xs font-medium uppercase tracking-wider text-primary/90">Overview</p>
-            <h1 class="text-2xl font-semibold tracking-tight mt-1">KubeVirt dashboard</h1>
+            <h1 class="text-2xl font-semibold tracking-tight mt-1">KubeVirt Tools</h1>
             <p class="text-sm text-base-content/60 mt-1">
-              Cluster snapshot, VM distribution, and storage — inspired by classic ops consoles.
+              Cluster-wide Virtualization Insights
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
@@ -128,6 +128,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
               active={@active_tab}
               event="set_tab"
               tabs={dashboard_tab_defs()}
+              active_style={:outline_primary}
               class="border-b border-base-300/50 pb-3 mb-0"
             />
 
@@ -139,11 +140,14 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 class="space-y-8 scroll-mt-24"
               >
                 <div id="overview" class="space-y-8 pt-1">
-                  <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/55 min-h-[1.75rem]">
-                    <span
-                      :if={data.cluster}
-                      class="badge badge-ghost badge-sm gap-1 font-mono px-3 py-2 h-auto whitespace-normal"
-                    >
+                  <div
+                    :if={data.cluster}
+                    class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs min-h-[1.75rem]"
+                  >
+                    <span class="shrink-0 font-semibold uppercase tracking-wide text-base-content/55">
+                      Current context
+                    </span>
+                    <span class="badge badge-ghost badge-sm gap-1 font-mono px-3 py-2 h-auto whitespace-normal text-base-content/80">
                       {data.user} @ {data.cluster}
                     </span>
                   </div>
@@ -229,7 +233,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                           "vCPUs",
                           m.node_labels,
                           m.node_vcpu_counts,
-                          "#f87171"
+                          "var(--color-primary)"
                         )
                       }
                     />
@@ -243,7 +247,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                           "MiB",
                           m.node_labels,
                           m.node_mem_mib,
-                          "#4ade80"
+                          "var(--color-success)"
                         )
                       }
                     />
@@ -384,11 +388,15 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :label, :string, required: true
   attr :value, :any, required: true
   attr :sub, :string, default: nil
-  attr :highlight, :atom, values: [:neutral, :success, :danger, :warning], default: :neutral
+
+  attr :highlight, :atom,
+    values: [:neutral, :primary, :success, :danger, :warning],
+    default: :neutral
 
   defp stat_tile(assigns) do
     value_class =
       case assigns.highlight do
+        :primary -> "text-primary"
         :success -> "text-emerald-400"
         :danger -> "text-rose-400"
         :warning -> "text-amber-400"

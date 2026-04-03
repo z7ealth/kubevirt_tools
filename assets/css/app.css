@@ -1,6 +1,8 @@
 /* See the Tailwind configuration guide for advanced usage
    https://tailwindcss.com/docs/configuration */
 
+@import "./bitter-font.css";
+
 @import "tailwindcss" source(none);
 @source "../css";
 @source "../js";
@@ -17,35 +19,33 @@
   themes: false;
 }
 
-/* daisyUI theme plugin. You can update this file by fetching the latest version with:
-  curl -sLO https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.js
-  We ship with two themes, a light one inspired on Phoenix colors and a dark one inspired
-  on Elixir colors. Build your own at: https://daisyui.com/theme-generator/ */
+/* daisyUI theme — teal palette from kubevirt.io (/css/main.css: #00797f, #00aab2,
+   #3accc5, #4d5258, nav accent #fed476). https://daisyui.com/theme-generator/ */
 @plugin "../vendor/daisyui-theme" {
   name: "dark";
   default: false;
   prefersdark: true;
   color-scheme: "dark";
-  --color-base-100: oklch(30.33% 0.016 252.42);
-  --color-base-200: oklch(25.26% 0.014 253.1);
-  --color-base-300: oklch(20.15% 0.012 254.09);
-  --color-base-content: oklch(97.807% 0.029 256.847);
-  --color-primary: oklch(58% 0.233 277.117);
-  --color-primary-content: oklch(96% 0.018 272.314);
-  --color-secondary: oklch(58% 0.233 277.117);
-  --color-secondary-content: oklch(96% 0.018 272.314);
-  --color-accent: oklch(60% 0.25 292.717);
-  --color-accent-content: oklch(96% 0.016 293.756);
-  --color-neutral: oklch(37% 0.044 257.287);
-  --color-neutral-content: oklch(98% 0.003 247.858);
-  --color-info: oklch(58% 0.158 241.966);
-  --color-info-content: oklch(97% 0.013 236.62);
-  --color-success: oklch(60% 0.118 184.704);
-  --color-success-content: oklch(98% 0.014 180.72);
-  --color-warning: oklch(66% 0.179 58.318);
-  --color-warning-content: oklch(98% 0.022 95.277);
-  --color-error: oklch(58% 0.253 17.585);
-  --color-error-content: oklch(96% 0.015 12.422);
+  --color-base-100: oklch(22% 0.035 201);
+  --color-base-200: oklch(18% 0.032 201);
+  --color-base-300: oklch(14% 0.028 201);
+  --color-base-content: oklch(96% 0.015 200);
+  --color-primary: oklch(67% 0.114 201);
+  --color-primary-content: oklch(20% 0.055 201);
+  --color-secondary: oklch(40% 0.038 250);
+  --color-secondary-content: oklch(96% 0.018 250);
+  --color-accent: oklch(72% 0.1 192);
+  --color-accent-content: oklch(22% 0.05 192);
+  --color-neutral: oklch(32% 0.03 201);
+  --color-neutral-content: oklch(97% 0.01 200);
+  --color-info: oklch(62% 0.106 201);
+  --color-info-content: oklch(98% 0.02 201);
+  --color-success: oklch(67% 0.114 201);
+  --color-success-content: oklch(20% 0.055 201);
+  --color-warning: oklch(78% 0.12 86);
+  --color-warning-content: oklch(26% 0.05 86);
+  --color-error: oklch(58% 0.19 25);
+  --color-error-content: oklch(98% 0.02 25);
   --radius-selector: 0.25rem;
   --radius-field: 0.25rem;
   --radius-box: 0.5rem;
@@ -61,26 +61,26 @@
   default: true;
   prefersdark: false;
   color-scheme: "light";
-  --color-base-100: oklch(98% 0 0);
-  --color-base-200: oklch(96% 0.001 286.375);
-  --color-base-300: oklch(92% 0.004 286.32);
-  --color-base-content: oklch(21% 0.006 285.885);
-  --color-primary: oklch(70% 0.213 47.604);
-  --color-primary-content: oklch(98% 0.016 73.684);
-  --color-secondary: oklch(55% 0.027 264.364);
-  --color-secondary-content: oklch(98% 0.002 247.839);
-  --color-accent: oklch(0% 0 0);
-  --color-accent-content: oklch(100% 0 0);
-  --color-neutral: oklch(44% 0.017 285.786);
-  --color-neutral-content: oklch(98% 0 0);
-  --color-info: oklch(62% 0.214 259.815);
-  --color-info-content: oklch(97% 0.014 254.604);
-  --color-success: oklch(70% 0.14 182.503);
-  --color-success-content: oklch(98% 0.014 180.72);
-  --color-warning: oklch(66% 0.179 58.318);
-  --color-warning-content: oklch(98% 0.022 95.277);
-  --color-error: oklch(58% 0.253 17.585);
-  --color-error-content: oklch(96% 0.015 12.422);
+  --color-base-100: oklch(99% 0.004 201);
+  --color-base-200: oklch(96% 0.008 201);
+  --color-base-300: oklch(91% 0.014 201);
+  --color-base-content: oklch(44% 0.012 253);
+  --color-primary: oklch(52% 0.089 201);
+  --color-primary-content: oklch(99% 0.01 201);
+  --color-secondary: oklch(50% 0.045 248);
+  --color-secondary-content: oklch(99% 0.012 248);
+  --color-accent: oklch(70% 0.1 192);
+  --color-accent-content: oklch(24% 0.06 201);
+  --color-neutral: oklch(48% 0.025 250);
+  --color-neutral-content: oklch(99% 0.006 250);
+  --color-info: oklch(52% 0.1 201);
+  --color-info-content: oklch(99% 0.015 201);
+  --color-success: oklch(52% 0.089 201);
+  --color-success-content: oklch(99% 0.01 201);
+  --color-warning: oklch(82% 0.12 86);
+  --color-warning-content: oklch(28% 0.06 86);
+  --color-error: oklch(52% 0.19 25);
+  --color-error-content: oklch(99% 0.02 25);
   --radius-selector: 0.25rem;
   --radius-field: 0.25rem;
   --radius-box: 0.5rem;
@@ -89,6 +89,10 @@
   --border: 1.5px;
   --depth: 1;
   --noise: 0;
+}
+
+@theme {
+  --font-sans: "Bitter", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 }
 
 /* Add variants based on LiveView classes */
@@ -103,3 +107,43 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* ApexCharts tooltips use `theme: false` + `fillSeriesColor: false` (see DashboardCharts.base_theme/0). */
+.apexcharts-tooltip {
+  background: var(--color-base-200) !important;
+  color: var(--color-base-content) !important;
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 14%, transparent) !important;
+  box-shadow: 0 4px 12px color-mix(in oklch, var(--color-base-content) 12%, transparent);
+}
+
+.apexcharts-tooltip-title,
+.apexcharts-tooltip-text,
+.apexcharts-tooltip-text-y-label,
+.apexcharts-tooltip-text-y-value {
+  color: var(--color-base-content) !important;
+}
+
+.apexcharts-tooltip-series-group {
+  background: transparent !important;
+}
+
+/* Flash toast: primary-colored progress bar (matches app surface on the card) */
+@keyframes flash-progress-bar {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.flash-progress-bar-fill {
+  transform-origin: left center;
+  animation: flash-progress-bar 6s linear forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash-progress-bar-fill {
+    animation: none;
+  }
+}

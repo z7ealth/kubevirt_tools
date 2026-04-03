@@ -1,31 +1,41 @@
 defmodule KubevirtTools.DashboardCharts do
   @moduledoc "Builds ApexCharts option maps for the KubeVirt dashboard."
 
+  # DaisyUI semantic tokens — series and chrome track `data-theme` (light/dark).
   @colors %{
-    green: "#22c55e",
-    red: "#ef4444",
-    amber: "#eab308",
-    blue: "#38bdf8",
-    violet: "#a78bfa",
-    slate: "#94a3b8"
+    green: "var(--color-success)",
+    red: "var(--color-error)",
+    amber: "var(--color-warning)",
+    blue: "var(--color-info)",
+    violet: "var(--color-accent)",
+    slate: "var(--color-neutral)"
   }
+
+  @empty_series_color "var(--color-base-300)"
+
+  defp axis_label_style(font_size) when font_size in ["10px", "11px"] do
+    %{
+      "colors" => "color-mix(in oklch, var(--color-base-content) 48%, transparent)",
+      "fontSize" => font_size
+    }
+  end
 
   def base_theme do
     %{
       "chart" => %{
         "type" => "bar",
+        "fontFamily" => "Bitter, ui-serif, Georgia, Cambria, serif",
         "toolbar" => %{"show" => false},
         "background" => "transparent",
-        "foreColor" => "#d4d4d4",
+        "foreColor" => "var(--color-base-content)",
         "animations" => %{"enabled" => true, "speed" => 400},
         "offsetX" => 0,
         "offsetY" => 0,
         "parentHeightOffset" => 0
       },
-      "theme" => %{"mode" => "dark"},
       "dataLabels" => %{"enabled" => false},
       "grid" => %{
-        "borderColor" => "rgba(255,255,255,0.08)",
+        "borderColor" => "color-mix(in oklch, var(--color-base-content) 12%, transparent)",
         "strokeDashArray" => 4,
         "padding" => %{
           "left" => 8,
@@ -37,7 +47,11 @@ defmodule KubevirtTools.DashboardCharts do
         "yaxis" => %{"lines" => %{"show" => false}}
       },
       "legend" => legend_bottom_compact(),
-      "tooltip" => %{"theme" => "dark"}
+      "tooltip" => %{
+        "theme" => false,
+        # Default pie/donut uses fillSeriesColor: true → teal row bg + dark foreColor = unreadable.
+        "fillSeriesColor" => false
+      }
     }
   end
 
@@ -52,7 +66,9 @@ defmodule KubevirtTools.DashboardCharts do
       "fontSize" => "10px",
       "itemMargin" => %{"horizontal" => 6, "vertical" => 2},
       "markers" => %{"width" => 6, "height" => 6, "radius" => 2},
-      "labels" => %{"colors" => "#a3a3a3"}
+      "labels" => %{
+        "colors" => "color-mix(in oklch, var(--color-base-content) 52%, transparent)"
+      }
     }
   end
 
@@ -91,7 +107,7 @@ defmodule KubevirtTools.DashboardCharts do
 
     {series, labels, colors} =
       if Enum.sum(series) == 0 do
-        {[1], [Keyword.get(opts, :empty_label, "No data")], ["#64748b"]}
+        {[1], [Keyword.get(opts, :empty_label, "No data")], [@empty_series_color]}
       else
         {series, labels, [@colors.green, @colors.red, @colors.amber]}
       end
@@ -137,7 +153,7 @@ defmodule KubevirtTools.DashboardCharts do
 
     {series, labels, colors} =
       if Enum.sum(series) == 0 do
-        {[1], ["No nodes"], ["#64748b"]}
+        {[1], ["No nodes"], [@empty_series_color]}
       else
         {series, labels, [@colors.green, @colors.amber, @colors.red]}
       end
@@ -211,13 +227,13 @@ defmodule KubevirtTools.DashboardCharts do
         "labels" => %{
           "trim" => true,
           "maxHeight" => 120,
-          "style" => %{"colors" => "#a3a3a3", "fontSize" => "10px"}
+          "style" => axis_label_style("10px")
         }
       },
       "yaxis" => %{
         "labels" => %{
           "maxWidth" => 220,
-          "style" => %{"colors" => "#a3a3a3", "fontSize" => "10px"}
+          "style" => axis_label_style("10px")
         }
       },
       "colors" => [@colors.blue],
@@ -248,13 +264,13 @@ defmodule KubevirtTools.DashboardCharts do
         "categories" => categories,
         "labels" => %{
           "trim" => true,
-          "style" => %{"colors" => "#a3a3a3", "fontSize" => "10px"}
+          "style" => axis_label_style("10px")
         }
       },
       "yaxis" => %{
         "labels" => %{
           "maxWidth" => 220,
-          "style" => %{"colors" => "#a3a3a3", "fontSize" => "10px"}
+          "style" => axis_label_style("10px")
         }
       },
       "colors" => [color],
@@ -271,7 +287,7 @@ defmodule KubevirtTools.DashboardCharts do
   def pvc_storage_class_pie(labels, series) do
     {labels, series, pie_colors} =
       if labels == [] or Enum.sum(series) == 0 do
-        {["No PVCs"], [1], ["#64748b"]}
+        {["No PVCs"], [1], [@empty_series_color]}
       else
         {labels, series,
          [
@@ -308,7 +324,7 @@ defmodule KubevirtTools.DashboardCharts do
 
     {series, labels, colors} =
       if Enum.sum(series) == 0 do
-        {[1], ["No PVCs"], ["#64748b"]}
+        {[1], ["No PVCs"], [@empty_series_color]}
       else
         {series, ["Bound", "Pending", "Lost", "Other"],
          [@colors.green, @colors.amber, @colors.red, @colors.slate]}
@@ -341,6 +357,7 @@ defmodule KubevirtTools.DashboardCharts do
     n = length(categories)
     h = max(220, node_horizontal_chart_height_px(n))
 
+    # Same token as memory / “healthy” donuts — `info` is a brighter cyan in our theme.
     chart_with_opts(%{
       "chart" => %{"type" => "bar", "height" => h},
       "series" => [%{"name" => "Nodes", "data" => values}],
@@ -353,15 +370,15 @@ defmodule KubevirtTools.DashboardCharts do
       },
       "xaxis" => %{
         "categories" => categories,
-        "labels" => %{"style" => %{"colors" => "#a3a3a3", "fontSize" => "11px"}}
+        "labels" => %{"style" => axis_label_style("11px")}
       },
       "yaxis" => %{
         "labels" => %{
           "maxWidth" => 120,
-          "style" => %{"colors" => "#a3a3a3", "fontSize" => "11px"}
+          "style" => axis_label_style("11px")
         }
       },
-      "colors" => [@colors.violet],
+      "colors" => [@colors.green],
       "legend" => %{"show" => false},
       "grid" => %{"padding" => %{"left" => 12, "right" => 8, "top" => 4, "bottom" => 28}}
     })
