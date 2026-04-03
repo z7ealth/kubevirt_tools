@@ -421,7 +421,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                             Node cordoned
                           </li>
                           <li class="flex items-center gap-2">
-                            <span class="size-3 rounded-sm bg-error/85 border border-error shrink-0 shadow-sm" />
+                            <span class="size-3 rounded-sm bg-stopped-dim border border-stopped shrink-0 shadow-sm" />
                             Node not ready, unknown host, or Unscheduled
                           </li>
                           <li class="flex items-center gap-2">
@@ -429,7 +429,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                             VM running
                           </li>
                           <li class="flex items-center gap-2">
-                            <span class="size-3 rounded-full bg-error/85 border border-error shrink-0 shadow-sm" />
+                            <span class="size-3 rounded-full bg-stopped-dim border border-stopped shrink-0 shadow-sm" />
                             VM stopped
                           </li>
                           <li class="flex items-center gap-2">
@@ -502,7 +502,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                           <div class="flex justify-between gap-2">
                             <dt class="text-base-content/55">Stopped</dt>
                             <dd
-                              class="font-mono tabular-nums text-error"
+                              class="font-mono tabular-nums text-stopped"
                               data-topology-summary-stopped
                             >
                               —
@@ -548,7 +548,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       case assigns.highlight do
         :primary -> "text-primary"
         :success -> "text-emerald-400"
-        :danger -> "text-rose-400"
+        :danger -> "text-stopped"
         :warning -> "text-amber-400"
         :neutral -> "text-base-content"
       end
@@ -1463,8 +1463,12 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
         String.contains?(phase, "error") or String.contains?(phase, "failed") or
             String.contains?(phase, "crash") ->
-          # Softer than default `badge-error` (requested ~#d44444)
-          ["border-0", "bg-[#d44444]", "text-white", "shadow-sm"]
+          [
+            "border-0",
+            "bg-[color:var(--color-stopped)]",
+            "text-[color:var(--color-stopped-content)]",
+            "shadow-sm"
+          ]
 
         String.contains?(phase, "waiting") or String.contains?(phase, "pending") or
             phase == "unknown" ->

@@ -1,0 +1,18 @@
+# Template from ~/Projects/kubevirt/dv_fedora_vm.yaml — disk size overridden by seed script.
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: "fedora"
+  namespace: virt
+spec:
+  storage:
+    storageClassName: standard
+    accessModes:
+      - ReadWriteOnce
+    volumeMode: Filesystem
+    resources:
+      requests:
+        storage: 5Gi
+  source:
+    http:
+      url: "https://ftp2.osuosl.org/pub/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2"

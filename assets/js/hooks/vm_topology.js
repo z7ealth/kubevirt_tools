@@ -49,18 +49,18 @@ function readTopologyTheme(el) {
       hoverBorder
     ),
     hostDown: pair(
-      v("--topology-hd-bg", "#5c1a1a"),
-      v("--topology-hd-border", "#dc2626"),
-      v("--topology-hd-hi-bg", "#991b1b"),
-      v("--topology-hd-hi-border", "#f87171"),
+      v("--topology-hd-bg", "#4a2528"),
+      v("--topology-hd-border", "#b85858"),
+      v("--topology-hd-hi-bg", "#6d383c"),
+      v("--topology-hd-hi-border", "#d08080"),
       hoverBg,
       hoverBorder
     ),
     hostUnsched: pair(
-      v("--topology-hu-bg", "#5c1a1a"),
-      v("--topology-hu-border", "#dc2626"),
-      v("--topology-hu-hi-bg", "#991b1b"),
-      v("--topology-hu-hi-border", "#f87171"),
+      v("--topology-hu-bg", "#4a2528"),
+      v("--topology-hu-border", "#b85858"),
+      v("--topology-hu-hi-bg", "#6d383c"),
+      v("--topology-hu-hi-border", "#d08080"),
       hoverBg,
       hoverBorder
     ),
@@ -73,10 +73,10 @@ function readTopologyTheme(el) {
       hoverBorder
     ),
     vmStopped: pair(
-      v("--topology-vs-bg", "#5c1a1a"),
-      v("--topology-vs-border", "#ef4444"),
-      v("--topology-vs-hi-bg", "#991b1b"),
-      v("--topology-vs-hi-border", "#f87171"),
+      v("--topology-vs-bg", "#4a2528"),
+      v("--topology-vs-border", "#c06868"),
+      v("--topology-vs-hi-bg", "#6d383c"),
+      v("--topology-vs-hi-border", "#d88888"),
       hoverBg,
       hoverBorder
     ),

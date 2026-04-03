@@ -4,7 +4,8 @@ defmodule KubevirtTools.DashboardCharts do
   # DaisyUI semantic tokens — series and chrome track `data-theme` (light/dark).
   @colors %{
     green: "var(--color-success)",
-    red: "var(--color-error)",
+    # Stopped / “negative” slices — soft red (`--color-stopped` in app.css), not alert `--color-error`.
+    red: "var(--color-stopped)",
     amber: "var(--color-warning)",
     blue: "var(--color-info)",
     violet: "var(--color-accent)",
