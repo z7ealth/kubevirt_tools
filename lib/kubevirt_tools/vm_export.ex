@@ -9,7 +9,7 @@ defmodule KubevirtTools.VmExport do
     "Name",
     "UID",
     "VM phase",
-    "Run strategy",
+    "Boot mode",
     "Running",
     "CPU (spec)",
     "Memory (spec)",
@@ -38,7 +38,7 @@ defmodule KubevirtTools.VmExport do
           name,
           meta(vm, "uid"),
           printable_status(vm),
-          to_cell(get_in(vm, ["spec", "runStrategy"])),
+          to_cell(boot_mode_label(vm)),
           to_cell(get_in(vm, ["spec", "running"])),
           to_cell(get_in(vm, ["spec", "template", "spec", "domain", "cpu", "cores"])),
           to_cell(get_in(vm, ["spec", "template", "spec", "domain", "memory", "guest"])),
@@ -98,6 +98,26 @@ defmodule KubevirtTools.VmExport do
     case get_in(obj, ["metadata", key]) do
       nil -> "—"
       val -> to_string(val)
+    end
+  end
+
+  @doc """
+  Human-readable boot mode from `spec.template.spec.domain.firmware.bootloader`
+  (KubeVirt: BIOS vs UEFI, including secure boot when set).
+  """
+  @spec boot_mode_label(map()) :: String.t()
+  def boot_mode_label(vm) when is_map(vm) do
+    bl = get_in(vm, ["spec", "template", "spec", "domain", "firmware", "bootloader"]) || %{}
+
+    case bl do
+      %{"efi" => efi} when is_map(efi) ->
+        if efi["secureBoot"] == true, do: "UEFI (Secure Boot)", else: "UEFI"
+
+      %{"bios" => bios} when is_map(bios) ->
+        "BIOS"
+
+      _ ->
+        "BIOS"
     end
   end
 

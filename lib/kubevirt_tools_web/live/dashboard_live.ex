@@ -8,6 +8,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   alias KubevirtTools.DashboardCharts
   alias KubevirtTools.KubeVirt
   alias KubevirtTools.KubeconfigStore
+  alias KubevirtTools.VmExport
   alias KubevirtTools.VmTopology
   alias KubevirtTools.PrometheusClient
   alias KubevirtTools.PrometheusMetricsServer
@@ -44,7 +45,6 @@ defmodule KubevirtToolsWeb.DashboardLive do
       case tab do
         "dashboard" -> :dashboard
         "vms" -> :vms
-        "instances" -> :instances
         "vm_topology" -> :vm_topology
         _ -> socket.assigns.active_tab
       end
@@ -335,50 +335,58 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 root_id="kubevirt-dashboard-tabs"
                 tab={:vms}
                 active={@active_tab}
-                class="space-y-3 scroll-mt-24 pt-1"
+                class="space-y-6 scroll-mt-24 pt-1"
               >
-                <section id="vms">
-                  <h2 class="text-lg font-medium flex items-center gap-2">
-                    <.icon name="hero-computer-desktop" class="size-5 text-primary" /> VirtualMachines
-                  </h2>
+                <section id="vms" class="space-y-3">
+                  <div>
+                    <h2 class="text-lg font-medium flex items-center gap-2">
+                      <.icon name="hero-computer-desktop" class="size-5 text-primary" />
+                      Virtual machines
+                    </h2>
+                    <p class="text-sm text-base-content/55 mt-1 max-w-3xl">
+                      Each row is a VirtualMachine with live instance fields from the matching VMI (same namespace and name) when it exists.
+                    </p>
+                  </div>
                   <%= if data.vm_error do %>
-                    <div class="alert alert-warning text-sm mt-3">
+                    <div class="alert alert-warning text-sm">
                       <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
                       <span>
                         Could not list VirtualMachines ({vm_error_text(data.vm_error)}).
                       </span>
                     </div>
-                  <% else %>
-                    <div class="mt-3">
+                  <% end %>
+                  <%= if data.vmi_error do %>
+                    <div class="alert alert-warning text-sm">
+                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                      <span>
+                        Could not list VMIs — join columns will be empty ({vm_error_text(
+                          data.vmi_error
+                        )}).
+                      </span>
+                    </div>
+                  <% end %>
+                  <%= if data.vm_error == nil do %>
+                    <div class="mt-1">
                       <.vm_table
                         items={data.vms}
+                        vmis={if(data.vmi_error, do: [], else: data.vmis)}
+                        pvcs={List.wrap(data.pvcs)}
                         empty_label="No VirtualMachines found."
                         id_prefix="vm"
                       />
                     </div>
                   <% end %>
-                </section>
-              </.tab_panel>
-
-              <.tab_panel
-                root_id="kubevirt-dashboard-tabs"
-                tab={:instances}
-                active={@active_tab}
-                class="space-y-3 scroll-mt-24 pt-1"
-              >
-                <section id="vmis">
-                  <h2 class="text-lg font-medium flex items-center gap-2">
-                    <.icon name="hero-cpu-chip" class="size-5 text-secondary" />
-                    VirtualMachineInstances
-                  </h2>
-                  <%= if data.vmi_error do %>
-                    <div class="alert alert-warning text-sm mt-3">
-                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
-                      <span>Could not list VMIs ({vm_error_text(data.vmi_error)}).</span>
-                    </div>
-                  <% else %>
-                    <div class="mt-3">
-                      <.vmi_table items={data.vmis} empty_label="No VMIs found." id_prefix="vmi" />
+                  <%= if data.vmi_error == nil && data.vm_error == nil do %>
+                    <% orphans = vmi_orphans_without_vm(data.vms, data.vmis) %>
+                    <div :if={orphans != []} class="space-y-2 pt-2 border-t border-base-300/50">
+                      <h3 class="text-base font-medium flex items-center gap-2">
+                        <.icon name="hero-cpu-chip" class="size-5 text-secondary" />
+                        VM instances without a VirtualMachine
+                      </h3>
+                      <p class="text-xs text-base-content/50">
+                        Usually short-lived (e.g. during delete); same columns as instance view.
+                      </p>
+                      <.orphan_vmi_table items={orphans} id_prefix="orphan-vmi" />
                     </div>
                   <% end %>
                 </section>
@@ -698,10 +706,17 @@ defmodule KubevirtToolsWeb.DashboardLive do
   end
 
   attr :items, :list, required: true
+  attr :vmis, :list, default: []
+  attr :pvcs, :list, default: []
   attr :empty_label, :string, required: true
   attr :id_prefix, :string, required: true
 
   defp vm_table(assigns) do
+    assigns =
+      assigns
+      |> assign(:vmi_lookup, vmi_index_by_ns_name(List.wrap(assigns.vmis)))
+      |> assign(:pvc_by_ns_claim, pvc_requests_by_namespace_claim(List.wrap(assigns.pvcs)))
+
     ~H"""
     <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
       <table class="table table-sm">
@@ -709,22 +724,68 @@ defmodule KubevirtToolsWeb.DashboardLive do
           <tr>
             <th>Namespace</th>
             <th>Name</th>
-            <th>Phase</th>
+            <th>VM phase</th>
+            <th title="template.spec.domain.firmware.bootloader">Boot mode</th>
+            <th>Cores</th>
+            <th>Sockets</th>
+            <th>vCPUs</th>
+            <th>Memory</th>
+            <th>VMI phase</th>
+            <th>Node</th>
+            <th>IP</th>
+            <th>Disks</th>
             <th>Created</th>
           </tr>
         </thead>
         <tbody>
           <tr :if={@items == []}>
-            <td colspan="4" class="text-center text-base-content/50 py-8">{@empty_label}</td>
+            <td colspan="13" class="text-center text-base-content/50 py-8">{@empty_label}</td>
           </tr>
           <%= for {item, i} <- Enum.with_index(@items) do %>
+            <% vmi = vmi_lookup_match(@vmi_lookup, item) %>
+            <% {cores, sockets, vcpus} = vm_cpu_topology_cells(item, vmi) %>
             <tr id={"#{@id_prefix}-row-#{i}"} class="hover:bg-base-200/40 transition-colors">
-              <td class="font-mono text-xs">{vm_meta(item, :namespace)}</td>
-              <td class="font-medium">{vm_meta(item, :name)}</td>
+              <td class="font-mono text-xs whitespace-nowrap">{vm_meta(item, :namespace)}</td>
+              <td class="font-medium whitespace-nowrap">{vm_meta(item, :name)}</td>
               <td>
-                <span class="badge badge-sm badge-outline">{vm_phase(item)}</span>
+                <span class={vm_phase_badge_classes(item)}>{vm_phase(item)}</span>
               </td>
-              <td class="text-xs text-base-content/60">{vm_meta(item, :created)}</td>
+              <td class="text-xs text-base-content/80 whitespace-nowrap">{vm_boot_mode(item)}</td>
+              <td class="text-xs tabular-nums" title="Cores per socket (domain.cpu.cores)">
+                {cores}
+              </td>
+              <td class="text-xs tabular-nums" title="Socket count (domain.cpu.sockets)">
+                {sockets}
+              </td>
+              <td class="text-xs tabular-nums font-medium" title="sockets × cores × threads">
+                {vcpus}
+              </td>
+              <td class="text-xs font-mono text-base-content/75">{memory_for_vm_row(item, vmi)}</td>
+              <td>
+                <span :if={vmi} class="badge badge-sm badge-ghost">{vmi_phase(vmi)}</span>
+                <span :if={!vmi} class="text-xs text-base-content/45">—</span>
+              </td>
+              <td
+                class="font-mono text-xs text-base-content/70 max-w-[10rem] truncate"
+                title={vmi_node(vmi || %{})}
+              >
+                {if(vmi, do: vmi_node(vmi), else: "—")}
+              </td>
+              <td
+                class="font-mono text-xs text-base-content/80 max-w-[9rem] truncate"
+                title={if(vmi, do: vmi_primary_ip(vmi), else: "")}
+              >
+                {if(vmi, do: vmi_primary_ip(vmi), else: "—")}
+              </td>
+              <td
+                class="text-xs tabular-nums text-base-content/85 whitespace-nowrap"
+                title={vm_disk_column_title(item, @pvc_by_ns_claim)}
+              >
+                {vm_disk_column(item, @pvc_by_ns_claim)}
+              </td>
+              <td class="text-xs text-base-content/60 whitespace-nowrap">
+                {vm_meta(item, :created)}
+              </td>
             </tr>
           <% end %>
         </tbody>
@@ -734,10 +795,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
   end
 
   attr :items, :list, required: true
-  attr :empty_label, :string, required: true
   attr :id_prefix, :string, required: true
 
-  defp vmi_table(assigns) do
+  defp orphan_vmi_table(assigns) do
     ~H"""
     <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
       <table class="table table-sm">
@@ -747,20 +807,39 @@ defmodule KubevirtToolsWeb.DashboardLive do
             <th>Name</th>
             <th>Phase</th>
             <th>Node</th>
+            <th>vCPU</th>
+            <th>Memory</th>
+            <th>IP</th>
+            <th>Ready</th>
+            <th>Created</th>
           </tr>
         </thead>
         <tbody>
-          <tr :if={@items == []}>
-            <td colspan="4" class="text-center text-base-content/50 py-8">{@empty_label}</td>
-          </tr>
           <%= for {item, i} <- Enum.with_index(@items) do %>
             <tr id={"#{@id_prefix}-row-#{i}"} class="hover:bg-base-200/40 transition-colors">
-              <td class="font-mono text-xs">{vm_meta(item, :namespace)}</td>
-              <td class="font-medium">{vm_meta(item, :name)}</td>
+              <td class="font-mono text-xs whitespace-nowrap">{vm_meta(item, :namespace)}</td>
+              <td class="font-medium whitespace-nowrap">{vm_meta(item, :name)}</td>
               <td>
                 <span class="badge badge-sm badge-outline">{vmi_phase(item)}</span>
               </td>
-              <td class="font-mono text-xs text-base-content/70">{vmi_node(item)}</td>
+              <td
+                class="font-mono text-xs text-base-content/70 max-w-[10rem] truncate"
+                title={vmi_node(item)}
+              >
+                {vmi_node(item)}
+              </td>
+              <td class="text-xs tabular-nums">{vmi_spec_cpu_cores(item)}</td>
+              <td class="text-xs font-mono text-base-content/75">{vmi_spec_memory_guest(item)}</td>
+              <td
+                class="font-mono text-xs text-base-content/80 max-w-[9rem] truncate"
+                title={vmi_primary_ip(item)}
+              >
+                {vmi_primary_ip(item)}
+              </td>
+              <td class="text-xs">{vmi_ready_label(item)}</td>
+              <td class="text-xs text-base-content/60 whitespace-nowrap">
+                {vm_meta(item, :created)}
+              </td>
             </tr>
           <% end %>
         </tbody>
@@ -773,7 +852,6 @@ defmodule KubevirtToolsWeb.DashboardLive do
     [
       %{id: :dashboard, label: "Dashboard"},
       %{id: :vms, label: "VMs"},
-      %{id: :instances, label: "Instances"},
       %{id: :vm_topology, label: "VM Topology"}
     ]
   end
@@ -1354,6 +1432,51 @@ defmodule KubevirtToolsWeb.DashboardLive do
     get_in(item, ["status", "printableStatus"]) || "—"
   end
 
+  defp vm_phase_badge_classes(vm) do
+    phase =
+      vm
+      |> vm_phase()
+      |> to_string()
+      |> String.trim()
+      |> String.downcase()
+
+    extra =
+      cond do
+        phase in ["", "—"] ->
+          ["badge-ghost", "border", "border-base-300/55", "text-base-content/75"]
+
+        phase == "running" ->
+          ["badge-success"]
+
+        phase == "stopped" ->
+          ["badge-neutral"]
+
+        phase in [
+          "starting",
+          "stopping",
+          "terminating",
+          "migrating",
+          "provisioning",
+          "paused"
+        ] ->
+          ["badge-warning"]
+
+        String.contains?(phase, "error") or String.contains?(phase, "failed") or
+            String.contains?(phase, "crash") ->
+          # Softer than default `badge-error` (requested ~#d44444)
+          ["border-0", "bg-[#d44444]", "text-white", "shadow-sm"]
+
+        String.contains?(phase, "waiting") or String.contains?(phase, "pending") or
+            phase == "unknown" ->
+          ["badge-info"]
+
+        true ->
+          ["badge-ghost", "border", "border-base-300/55", "text-base-content/80"]
+      end
+
+    ["badge", "badge-sm"] ++ extra
+  end
+
   defp vmi_phase(item) do
     get_in(item, ["status", "phase"]) || "—"
   end
@@ -1361,4 +1484,362 @@ defmodule KubevirtToolsWeb.DashboardLive do
   defp vmi_node(item) do
     get_in(item, ["status", "nodeName"]) || "—"
   end
+
+  defp vmi_index_by_ns_name(vmis) when is_list(vmis) do
+    for vmi <- vmis, into: %{} do
+      k = {vm_meta(vmi, :namespace), vm_meta(vmi, :name)}
+      {k, vmi}
+    end
+  end
+
+  defp vmi_lookup_match(lookup, vm) when is_map(lookup) and is_map(vm) do
+    Map.get(lookup, {vm_meta(vm, :namespace), vm_meta(vm, :name)})
+  end
+
+  defp vmi_orphans_without_vm(vms, vmis) when is_list(vms) and is_list(vmis) do
+    keys =
+      MapSet.new(
+        for vm <- vms do
+          {vm_meta(vm, :namespace), vm_meta(vm, :name)}
+        end
+      )
+
+    Enum.filter(vmis, fn vmi ->
+      k = {vm_meta(vmi, :namespace), vm_meta(vmi, :name)}
+      not MapSet.member?(keys, k)
+    end)
+  end
+
+  defp vm_cpu_topology_cells(vm, vmi) do
+    vm
+    |> vm_cpu_domain_for_row(vmi)
+    |> format_domain_cpu_topology()
+  end
+
+  defp vm_cpu_domain_for_row(vm, vmi) do
+    vmi_cpu = vmi && get_in(vmi, ["spec", "domain", "cpu"])
+    vm_cpu = get_in(vm, ["spec", "template", "spec", "domain", "cpu"])
+
+    if domain_cpu_has_numeric_topology?(vmi_cpu) do
+      vmi_cpu
+    else
+      vm_cpu
+    end
+  end
+
+  defp domain_cpu_has_numeric_topology?(nil), do: false
+
+  defp domain_cpu_has_numeric_topology?(cpu) when is_map(cpu) do
+    Enum.any?(["cores", "sockets", "threads"], fn k ->
+      case cpu[k] do
+        nil -> false
+        n when is_integer(n) and n >= 1 -> true
+        n when is_binary(n) -> match?({i, _} when i >= 1, Integer.parse(String.trim(n)))
+        _ -> false
+      end
+    end)
+  end
+
+  defp format_domain_cpu_topology(nil), do: {"1", "1", "1"}
+
+  defp format_domain_cpu_topology(cpu) when is_map(cpu) do
+    cores_n = cpu_topology_int(cpu["cores"])
+    socks_n = cpu_topology_int(cpu["sockets"])
+    thr_n = cpu_topology_int(cpu["threads"])
+    s_eff = socks_n || 1
+    c_eff = cores_n || 1
+    t_eff = thr_n || 1
+    total = s_eff * c_eff * t_eff
+
+    {
+      Integer.to_string(c_eff),
+      Integer.to_string(s_eff),
+      Integer.to_string(total)
+    }
+  end
+
+  defp cpu_topology_int(nil), do: nil
+
+  defp cpu_topology_int(n) when is_integer(n) and n >= 1, do: n
+
+  defp cpu_topology_int(n) when is_binary(n) do
+    case Integer.parse(String.trim(n)) do
+      {i, _} when i >= 1 -> i
+      _ -> nil
+    end
+  end
+
+  defp cpu_topology_int(_), do: nil
+
+  defp memory_for_vm_row(vm, nil), do: vm_spec_memory_guest(vm)
+
+  defp memory_for_vm_row(vm, vmi) do
+    case get_in(vmi, ["spec", "domain", "memory", "guest"]) do
+      nil -> vm_spec_memory_guest(vm)
+      s -> format_cell(s)
+    end
+  end
+
+  defp vm_boot_mode(vm), do: VmExport.boot_mode_label(vm)
+
+  defp vm_spec_memory_guest(vm) do
+    format_cell(get_in(vm, ["spec", "template", "spec", "domain", "memory", "guest"]))
+  end
+
+  defp vmi_spec_cpu_cores(item) do
+    case cpu_topology_int(get_in(item, ["spec", "domain", "cpu", "cores"])) do
+      nil -> "1"
+      n -> Integer.to_string(n)
+    end
+  end
+
+  defp vmi_spec_memory_guest(item) do
+    format_cell(get_in(item, ["spec", "domain", "memory", "guest"]))
+  end
+
+  defp vmi_primary_ip(item) do
+    interfaces = get_in(item, ["status", "interfaces"]) || []
+
+    ip =
+      Enum.find_value(interfaces, fn iface ->
+        case iface["ipAddress"] do
+          s when is_binary(s) and s != "" ->
+            s
+
+          _ ->
+            case iface["ipAddresses"] do
+              [first | _] when is_binary(first) and first != "" -> first
+              _ -> nil
+            end
+        end
+      end)
+
+    format_cell(ip)
+  end
+
+  defp vmi_ready_label(item) do
+    conditions = get_in(item, ["status", "conditions"]) || []
+
+    case Enum.find(conditions, &(&1["type"] == "Ready")) do
+      %{"status" => "True"} ->
+        "Ready"
+
+      %{"status" => "False"} ->
+        "Not ready"
+
+      %{"status" => s} when is_binary(s) ->
+        s
+
+      _ ->
+        "—"
+    end
+  end
+
+  # CD-ROM / floppy are treated as removable; everything else (disk, lun, …) counts.
+  defp vm_disk_device_removable?(%{} = d) do
+    Map.has_key?(d, "cdrom") or Map.has_key?(d, "floppy")
+  end
+
+  defp vm_non_removable_disks(vm) do
+    disks = get_in(vm, ["spec", "template", "spec", "domain", "devices", "disks"]) || []
+    Enum.reject(disks, &vm_disk_device_removable?/1)
+  end
+
+  defp vm_template_volume_by_name(vm) do
+    vols = get_in(vm, ["spec", "template", "spec", "volumes"]) || []
+
+    Map.new(vols, fn v ->
+      {v["name"], v}
+    end)
+  end
+
+  defp vm_data_volume_template_by_name(vm) do
+    tpls = get_in(vm, ["spec", "dataVolumeTemplates"]) || []
+
+    Map.new(tpls, fn t ->
+      {get_in(t, ["metadata", "name"]), t}
+    end)
+  end
+
+  defp vm_volume_storage_gib_contribution(vol, dvt_by_name, vm_ns, pvc_by_ns_claim)
+       when is_map(vol) do
+    cond do
+      is_binary(get_in(vol, ["dataVolume", "name"])) ->
+        dv_name = get_in(vol, ["dataVolume", "name"])
+
+        case Map.get(dvt_by_name, dv_name) do
+          nil ->
+            0.0
+
+          tpl ->
+            get_in(tpl, ["spec", "pvc", "resources", "requests", "storage"])
+            |> parse_k8s_quantity_to_gib()
+        end
+
+      is_binary(get_in(vol, ["persistentVolumeClaim", "claimName"])) ->
+        claim = get_in(vol, ["persistentVolumeClaim", "claimName"])
+        ns = pvc_claim_namespace(vol, vm_ns)
+
+        case ns do
+          n when is_binary(n) ->
+            case Map.get(pvc_by_ns_claim, {n, claim}) do
+              qty when is_binary(qty) -> parse_k8s_quantity_to_gib(qty)
+              _ -> 0.0
+            end
+
+          _ ->
+            0.0
+        end
+
+      true ->
+        vol
+        |> get_in([
+          "ephemeral",
+          "volumeClaimTemplate",
+          "spec",
+          "resources",
+          "requests",
+          "storage"
+        ])
+        |> parse_k8s_quantity_to_gib()
+    end
+  end
+
+  defp pvc_claim_namespace(vol, vm_ns) do
+    case get_in(vol, ["persistentVolumeClaim", "namespace"]) do
+      ns when is_binary(ns) and ns != "" -> ns
+      _ -> if(vm_ns in [nil, "", "—"], do: nil, else: vm_ns)
+    end
+  end
+
+  defp pvc_requests_by_namespace_claim(pvcs) when is_list(pvcs) do
+    Enum.reduce(pvcs, %{}, fn p, acc ->
+      ns = get_in(p, ["metadata", "namespace"])
+      nm = get_in(p, ["metadata", "name"])
+
+      if is_binary(ns) and is_binary(nm) do
+        storage =
+          get_in(p, ["spec", "resources", "requests", "storage"]) ||
+            get_in(p, ["status", "capacity", "storage"])
+
+        Map.put(acc, {ns, nm}, storage)
+      else
+        acc
+      end
+    end)
+  end
+
+  defp vm_non_removable_disk_storage_sum_gib(vm, pvc_by_ns_claim) do
+    vol_by_name = vm_template_volume_by_name(vm)
+    dvt_by_name = vm_data_volume_template_by_name(vm)
+    vm_ns = vm_meta(vm, :namespace)
+
+    vm
+    |> vm_non_removable_disks()
+    |> Enum.reduce(0.0, fn disk, acc ->
+      name = disk["name"]
+      vol = if is_binary(name), do: Map.get(vol_by_name, name), else: nil
+
+      gib =
+        if vol do
+          vm_volume_storage_gib_contribution(vol, dvt_by_name, vm_ns, pvc_by_ns_claim)
+        else
+          0.0
+        end
+
+      acc + gib
+    end)
+  end
+
+  defp vm_disk_column(vm, pvc_by_ns_claim) do
+    disks = vm_non_removable_disks(vm)
+    count = length(disks)
+    gib = vm_non_removable_disk_storage_sum_gib(vm, pvc_by_ns_claim)
+
+    cond do
+      count == 0 ->
+        "—"
+
+      gib > 0 ->
+        format_decimal_gb_display(gib_sum_to_decimal_gb(gib)) <> " GB (#{count})"
+
+      true ->
+        Integer.to_string(count)
+    end
+  end
+
+  defp vm_disk_column_title(vm, pvc_by_ns_claim) do
+    disks = vm_non_removable_disks(vm)
+    count = length(disks)
+    names = disks |> Enum.map(& &1["name"]) |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join(", ")
+    gib = vm_non_removable_disk_storage_sum_gib(vm, pvc_by_ns_claim)
+
+    base =
+      "#{count} non-removable disk(s)" <>
+        if(names != "", do: " (#{names})", else: "")
+
+    if gib > 0 do
+      gb = gib_sum_to_decimal_gb(gib)
+
+      base <>
+        " · Σ " <>
+        format_decimal_gb_display(gb) <>
+        " GB (decimal, from DataVolume templates, ephemeral PVC requests, and cluster PVCs matching claims)"
+    else
+      base <>
+        " — no resolvable sizes (check PVC list permissions / claim names)"
+    end
+  end
+
+  # Convert binary-GiB sum (1024-based quantities) to decimal GB (10^9 bytes) for display.
+  defp gib_sum_to_decimal_gb(gib) when is_float(gib) and gib >= 0 do
+    gib * 1_073_741_824 / 1_000_000_000
+  end
+
+  defp format_decimal_gb_display(gb) when is_float(gb) do
+    rounded = Float.round(gb, 2)
+
+    if rounded == trunc(rounded) * 1.0 do
+      Integer.to_string(trunc(rounded))
+    else
+      :erlang.float_to_binary(rounded, decimals: 2)
+    end
+  end
+
+  defp parse_k8s_quantity_to_gib(q) when q in [nil, ""], do: 0.0
+
+  defp parse_k8s_quantity_to_gib(q) when is_binary(q) do
+    case Regex.run(~r/^(\d+(?:\.\d+)?)\s*(Ki|Mi|Gi|Ti|K|M|G|T)?$/i, String.trim(q)) do
+      [_, num_str, suffix] ->
+        case Float.parse(num_str) do
+          {n, _} ->
+            suf = (suffix || "") |> to_string() |> String.downcase()
+            n * k8s_storage_suffix_to_gib_multiplier(suf)
+
+          :error ->
+            0.0
+        end
+
+      _ ->
+        0.0
+    end
+  end
+
+  defp parse_k8s_quantity_to_gib(q), do: parse_k8s_quantity_to_gib(to_string(q))
+
+  defp k8s_storage_suffix_to_gib_multiplier(""), do: 0.0
+  defp k8s_storage_suffix_to_gib_multiplier("gi"), do: 1.0
+  defp k8s_storage_suffix_to_gib_multiplier("g"), do: 1.0
+  defp k8s_storage_suffix_to_gib_multiplier("mi"), do: 1.0 / 1024
+  defp k8s_storage_suffix_to_gib_multiplier("m"), do: 1.0 / 1024
+  defp k8s_storage_suffix_to_gib_multiplier("ki"), do: 1.0 / 1024 / 1024
+  defp k8s_storage_suffix_to_gib_multiplier("k"), do: 1.0 / 1024 / 1024
+  defp k8s_storage_suffix_to_gib_multiplier("ti"), do: 1024.0
+  defp k8s_storage_suffix_to_gib_multiplier("t"), do: 1024.0
+  defp k8s_storage_suffix_to_gib_multiplier(_), do: 0.0
+
+  defp format_cell(nil), do: "—"
+  defp format_cell(""), do: "—"
+  defp format_cell(val) when is_boolean(val), do: if(val, do: "true", else: "false")
+  defp format_cell(val), do: to_string(val)
 end

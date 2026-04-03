@@ -39,9 +39,30 @@ defmodule KubevirtTools.VmExportTest do
   test "to_csv includes header and escaped fields" do
     csv = VmExport.to_csv([@vm], [@vmi])
     assert String.starts_with?(csv, "Namespace,Name,UID")
+    assert String.contains?(csv, "Boot mode")
+    assert String.contains?(csv, "BIOS")
+    refute String.contains?(csv, "Run strategy")
     assert String.contains?(csv, "ns1")
     assert String.contains?(csv, "my-vm")
     assert String.contains?(csv, "node-a")
+  end
+
+  test "boot_mode_label from firmware bootloader" do
+    assert VmExport.boot_mode_label(@vm) == "BIOS"
+
+    uefi_domain =
+      @vm["spec"]["template"]["spec"]["domain"]
+      |> Map.put("firmware", %{"bootloader" => %{"efi" => %{}}})
+
+    uefi_vm = put_in(@vm, ["spec", "template", "spec", "domain"], uefi_domain)
+    assert VmExport.boot_mode_label(uefi_vm) == "UEFI"
+
+    secure_domain =
+      @vm["spec"]["template"]["spec"]["domain"]
+      |> Map.put("firmware", %{"bootloader" => %{"efi" => %{"secureBoot" => true}}})
+
+    secure_vm = put_in(@vm, ["spec", "template", "spec", "domain"], secure_domain)
+    assert VmExport.boot_mode_label(secure_vm) == "UEFI (Secure Boot)"
   end
 
   test "to_xlsx produces non-empty binary" do
