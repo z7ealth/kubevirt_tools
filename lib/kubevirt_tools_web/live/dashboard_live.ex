@@ -79,22 +79,26 @@ defmodule KubevirtToolsWeb.DashboardLive do
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <span class="text-xs text-base-content/50 hidden sm:inline">Export</span>
-            <button
-              type="button"
-              disabled
-              class="btn btn-ghost btn-xs opacity-50 cursor-not-allowed"
-              title="Coming soon"
+            <.link
+              href={~p"/export/vms.xlsx"}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn btn-ghost btn-xs gap-1"
+              id="dashboard-export-xlsx"
+              title="Download VirtualMachines as Excel (vmInfo sheet)"
             >
               XLSX
-            </button>
-            <button
-              type="button"
-              disabled
-              class="btn btn-ghost btn-xs opacity-50 cursor-not-allowed"
-              title="Coming soon"
+            </.link>
+            <.link
+              href={~p"/export/vms.csv"}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn btn-ghost btn-xs gap-1"
+              id="dashboard-export-csv"
+              title="Download VirtualMachines as CSV"
             >
               CSV
-            </button>
+            </.link>
             <button
               type="button"
               phx-click="refresh"

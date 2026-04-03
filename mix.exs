@@ -21,7 +21,10 @@ defmodule KubevirtTools.MixProject do
   def application do
     [
       mod: {KubevirtTools.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger, :runtime_tools],
+      # Mix does not always infer :elixlsx into the .app `applications` list; without it,
+      # releases omit the app and `Elixlsx.*` is unavailable at runtime.
+      included_applications: [:elixlsx]
     ]
   end
 
@@ -61,7 +64,8 @@ defmodule KubevirtTools.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:k8s, "~> 2.8"},
-      {:req, "~> 0.5"}
+      {:req, "~> 0.5"},
+      {:elixlsx, "~> 0.6.0"}
     ]
   end
 

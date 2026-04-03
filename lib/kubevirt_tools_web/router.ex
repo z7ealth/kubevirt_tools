@@ -31,6 +31,9 @@ defmodule KubevirtToolsWeb.Router do
     post "/session", SessionController, :create
     delete "/session", SessionController, :delete
 
+    get "/export/vms.csv", ExportController, :vms_csv
+    get "/export/vms.xlsx", ExportController, :vms_xlsx
+
     live_session :kube do
       live "/login", LoginLive
       live "/dashboard", DashboardLive
