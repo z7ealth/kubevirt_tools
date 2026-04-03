@@ -8,6 +8,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   alias KubevirtTools.DashboardCharts
   alias KubevirtTools.KubeVirt
   alias KubevirtTools.KubeconfigStore
+  alias KubevirtTools.VmTopology
   alias KubevirtTools.PrometheusClient
   alias KubevirtTools.PrometheusMetricsServer
   alias KubevirtTools.PrometheusSetup
@@ -44,6 +45,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
         "dashboard" -> :dashboard
         "vms" -> :vms
         "instances" -> :instances
+        "vm_topology" -> :vm_topology
         _ -> socket.assigns.active_tab
       end
 
@@ -381,6 +383,142 @@ defmodule KubevirtToolsWeb.DashboardLive do
                   <% end %>
                 </section>
               </.tab_panel>
+
+              <.tab_panel
+                root_id="kubevirt-dashboard-tabs"
+                tab={:vm_topology}
+                active={@active_tab}
+                class="scroll-mt-24 pt-1 min-w-0"
+              >
+                <section
+                  id="vm-topology-root"
+                  data-vm-topology-root
+                  class="rounded-xl border border-base-300/60 bg-base-200/30 overflow-hidden"
+                  phx-hook="VmTopology"
+                  data-topology={Jason.encode!(VmTopology.build(data))}
+                >
+                  <div class="flex flex-col xl:flex-row min-h-[min(78vh,820px)] max-h-[min(85vh,900px)]">
+                    <aside class="w-full xl:w-64 shrink-0 border-b xl:border-b-0 xl:border-r border-base-300/50 p-4 space-y-5 bg-base-200/40">
+                      <div>
+                        <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50 mb-2">
+                          Legend
+                        </p>
+                        <ul class="text-xs space-y-1.5 text-base-content/80">
+                          <li class="flex items-center gap-2">
+                            <span class="size-3 rounded-sm bg-primary/85 border border-primary shrink-0 shadow-sm" />
+                            Cluster node (ready)
+                          </li>
+                          <li class="flex items-center gap-2">
+                            <span class="size-3 rounded-sm bg-warning/85 border border-warning shrink-0 shadow-sm" />
+                            Node cordoned
+                          </li>
+                          <li class="flex items-center gap-2">
+                            <span class="size-3 rounded-sm bg-error/85 border border-error shrink-0 shadow-sm" />
+                            Node not ready, unknown host, or Unscheduled
+                          </li>
+                          <li class="flex items-center gap-2">
+                            <span class="size-3 rounded-full bg-success/85 border border-success shrink-0 shadow-sm" />
+                            VM running
+                          </li>
+                          <li class="flex items-center gap-2">
+                            <span class="size-3 rounded-full bg-error/85 border border-error shrink-0 shadow-sm" />
+                            VM stopped
+                          </li>
+                          <li class="flex items-center gap-2">
+                            <span class="size-3 rounded-full bg-warning/70 border border-warning shrink-0 shadow-sm" />
+                            VM other
+                          </li>
+                        </ul>
+                      </div>
+                      <div>
+                        <label
+                          for="vm-topology-layout"
+                          class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50 block mb-1.5"
+                        >
+                          Layout
+                        </label>
+                        <select
+                          id="vm-topology-layout"
+                          data-topology-layout
+                          class="select select-bordered select-sm w-full text-sm bg-base-100/80"
+                        >
+                          <option value="organic">Organic</option>
+                          <option value="hierarchical">Hierarchical</option>
+                        </select>
+                      </div>
+                      <div>
+                        <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50 mb-2">
+                          Actions
+                        </p>
+                        <div class="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            data-topology-reset
+                            id="vm-topology-reset"
+                            class="btn btn-ghost btn-sm"
+                          >
+                            Reset view
+                          </button>
+                          <button
+                            type="button"
+                            data-topology-fit
+                            id="vm-topology-fit"
+                            class="btn btn-outline btn-primary btn-sm"
+                          >
+                            Fit to screen
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50 mb-2">
+                          Summary
+                        </p>
+                        <dl class="text-xs space-y-1 text-base-content/85">
+                          <div class="flex justify-between gap-2">
+                            <dt class="text-base-content/55">Nodes</dt>
+                            <dd class="font-mono tabular-nums" data-topology-summary-nodes>—</dd>
+                          </div>
+                          <div class="flex justify-between gap-2">
+                            <dt class="text-base-content/55">VMs</dt>
+                            <dd class="font-mono tabular-nums" data-topology-summary-vms>—</dd>
+                          </div>
+                          <div class="flex justify-between gap-2">
+                            <dt class="text-base-content/55">Running</dt>
+                            <dd
+                              class="font-mono tabular-nums text-success"
+                              data-topology-summary-running
+                            >
+                              —
+                            </dd>
+                          </div>
+                          <div class="flex justify-between gap-2">
+                            <dt class="text-base-content/55">Stopped</dt>
+                            <dd
+                              class="font-mono tabular-nums text-error"
+                              data-topology-summary-stopped
+                            >
+                              —
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+                    </aside>
+                    <div class="flex-1 min-h-[min(52vh,560px)] min-w-0 bg-base-300/20 relative">
+                      <div
+                        id="vm-topology-canvas"
+                        data-topology-canvas
+                        class="absolute inset-0 w-full h-full min-h-[min(52vh,560px)]"
+                      >
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                <p class="text-xs text-base-content/50 mt-3 px-1">
+                  VMs are linked to cluster nodes using each VMI’s
+                  <code class="text-[0.7rem] opacity-90">status.nodeName</code>
+                  (matching VM/VMI name and namespace). Stopped VMs without a VMI appear under <span class="font-medium">Unscheduled</span>.
+                </p>
+              </.tab_panel>
             </div>
           </.async_result>
         </div>
@@ -636,8 +774,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       %{id: :dashboard, label: "Dashboard"},
       %{id: :vms, label: "VMs"},
       %{id: :instances, label: "Instances"},
-      %{id: :snapshots, label: "Snapshots", disabled: true},
-      %{id: :health, label: "Health", disabled: true}
+      %{id: :vm_topology, label: "VM Topology"}
     ]
   end
 

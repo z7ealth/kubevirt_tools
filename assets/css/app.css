@@ -3,6 +3,8 @@
 
 @import "./bitter-font.css";
 
+@import "../node_modules/vis-network/styles/vis-network.min.css";
+
 @import "tailwindcss" source(none);
 @source "../css";
 @source "../js";
@@ -146,4 +148,64 @@
   .flash-progress-bar-fill {
     animation: none;
   }
+}
+
+/* VM topology (vis-network): colors track active Daisy theme via custom properties */
+[data-vm-topology-root] {
+  --topology-canvas-bg: color-mix(in oklch, var(--color-base-200) 78%, var(--color-base-300));
+  --topology-shadow: color-mix(in oklch, var(--color-base-content) 20%, transparent);
+  --topology-edge: color-mix(in oklch, var(--color-base-content) 28%, transparent);
+  --topology-node-label: var(--color-base-content);
+
+  /* Hover: white fill + dark teal ring (nodes + edges), label readable on white */
+  --topology-hover-bg: #ffffff;
+  --topology-hover-border: color-mix(in oklch, var(--color-primary) 38%, black);
+  --topology-hover-label: color-mix(in oklch, black 52%, var(--color-primary));
+  --topology-edge-hover-accent: color-mix(in oklch, var(--color-primary) 40%, black);
+
+  /* Host: ready (primary) */
+  --topology-hr-bg: color-mix(in oklch, var(--color-primary) 42%, var(--color-base-300));
+  --topology-hr-border: color-mix(in oklch, var(--color-primary) 78%, var(--color-base-100));
+  --topology-hr-hi-bg: color-mix(in oklch, var(--color-primary) 58%, var(--color-base-200));
+  --topology-hr-hi-border: var(--color-primary);
+
+  /* Host: cordoned (warning) */
+  --topology-hc-bg: color-mix(in oklch, var(--color-warning) 40%, var(--color-base-300));
+  --topology-hc-border: color-mix(in oklch, var(--color-warning) 75%, var(--color-base-100));
+  --topology-hc-hi-bg: color-mix(in oklch, var(--color-warning) 55%, var(--color-base-200));
+  --topology-hc-hi-border: var(--color-warning);
+
+  /* Host: not ready / unknown (error) */
+  --topology-hd-bg: color-mix(in oklch, var(--color-error) 42%, var(--color-base-300));
+  --topology-hd-border: color-mix(in oklch, var(--color-error) 72%, var(--color-base-100));
+  --topology-hd-hi-bg: color-mix(in oklch, var(--color-error) 58%, var(--color-base-200));
+  --topology-hd-hi-border: var(--color-error);
+
+  /* Host: Unscheduled pool — same tokens as “not ready / unknown” (legend error host) */
+  --topology-hu-bg: var(--topology-hd-bg);
+  --topology-hu-border: var(--topology-hd-border);
+  --topology-hu-hi-bg: var(--topology-hd-hi-bg);
+  --topology-hu-hi-border: var(--topology-hd-hi-border);
+
+  /* VM: running (success) */
+  --topology-vr-bg: color-mix(in oklch, var(--color-success) 44%, var(--color-base-300));
+  --topology-vr-border: color-mix(in oklch, var(--color-success) 78%, var(--color-base-100));
+  --topology-vr-hi-bg: color-mix(in oklch, var(--color-success) 60%, var(--color-base-200));
+  --topology-vr-hi-border: var(--color-success);
+
+  /* VM: stopped (error) */
+  --topology-vs-bg: color-mix(in oklch, var(--color-error) 40%, var(--color-base-300));
+  --topology-vs-border: color-mix(in oklch, var(--color-error) 70%, var(--color-base-100));
+  --topology-vs-hi-bg: color-mix(in oklch, var(--color-error) 56%, var(--color-base-200));
+  --topology-vs-hi-border: var(--color-error);
+
+  /* VM: other (warning) */
+  --topology-vo-bg: color-mix(in oklch, var(--color-warning) 36%, var(--color-base-300));
+  --topology-vo-border: color-mix(in oklch, var(--color-warning) 68%, var(--color-base-100));
+  --topology-vo-hi-bg: color-mix(in oklch, var(--color-warning) 52%, var(--color-base-200));
+  --topology-vo-hi-border: var(--color-warning);
+}
+
+[data-topology-canvas] .vis-network {
+  border-radius: var(--radius-box, 0.5rem);
 }
