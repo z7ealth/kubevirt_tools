@@ -172,56 +172,101 @@ defmodule KubevirtTools.DashboardCharts do
     })
   end
 
-  def vms_per_node_bar(labels, counts) when is_list(labels) and is_list(counts) do
+  @doc """
+  Pixel height for horizontal per-node bar charts so many nodes stay readable (scroll page / card).
+  """
+  def node_horizontal_chart_height_px(category_count)
+      when is_integer(category_count) and category_count >= 0 do
+    cond do
+      category_count <= 0 -> 200
+      category_count == 1 -> 200
+      category_count <= 3 -> 228
+      category_count <= 6 -> 280
+      category_count <= 12 -> min(520, 44 * category_count + 80)
+      true -> min(640, 36 * category_count + 100)
+    end
+  end
+
+  @doc """
+  Horizontal bars: one row per node (scales better than vertical columns for many nodes).
+  """
+  def vms_per_node_bar(labels, counts) do
+    labels = List.wrap(labels)
+    counts = List.wrap(counts)
+    n = length(labels)
+    h = node_horizontal_chart_height_px(n)
+
     chart_with_opts(%{
-      "chart" => %{"type" => "bar", "height" => 200},
+      "chart" => %{"type" => "bar", "height" => h},
       "series" => [%{"name" => "VMIs", "data" => counts}],
+      "plotOptions" => %{
+        "bar" => %{
+          "horizontal" => true,
+          "borderRadius" => 3,
+          "barHeight" => bar_height_percent(n)
+        }
+      },
       "xaxis" => %{
         "categories" => labels,
         "labels" => %{
-          "rotate" => -35,
-          "rotateAlways" => false,
-          "maxHeight" => 48,
           "trim" => true,
-          "style" => %{"colors" => "#a3a3a3", "fontSize" => "11px"}
+          "maxHeight" => 120,
+          "style" => %{"colors" => "#a3a3a3", "fontSize" => "10px"}
         }
       },
       "yaxis" => %{
-        "min" => 0,
-        "decimalsInFloat" => 0,
-        "labels" => %{"style" => %{"colors" => "#a3a3a3", "fontSize" => "11px"}}
+        "labels" => %{
+          "maxWidth" => 220,
+          "style" => %{"colors" => "#a3a3a3", "fontSize" => "10px"}
+        }
       },
       "colors" => [@colors.blue],
-      "plotOptions" => %{"bar" => %{"borderRadius" => 3, "columnWidth" => "55%"}},
       "legend" => %{"show" => false},
-      "grid" => %{"padding" => %{"bottom" => 8, "left" => 4, "right" => 4, "top" => 4}}
+      "grid" => %{"padding" => %{"left" => 8, "right" => 10, "top" => 6, "bottom" => 8}}
     })
   end
 
+  @doc false
+  def vmis_per_node_bar(labels, counts), do: vms_per_node_bar(labels, counts)
+
   def horizontal_bar(title, categories, values, color \\ nil) do
     color = color || @colors.red
+    n = length(categories)
+    h = node_horizontal_chart_height_px(n)
 
     chart_with_opts(%{
-      "chart" => %{"type" => "bar", "height" => 200},
+      "chart" => %{"type" => "bar", "height" => h},
       "series" => [%{"name" => title, "data" => values}],
       "plotOptions" => %{
-        "bar" => %{"horizontal" => true, "borderRadius" => 3, "barHeight" => "75%"}
+        "bar" => %{
+          "horizontal" => true,
+          "borderRadius" => 3,
+          "barHeight" => bar_height_percent(n)
+        }
       },
       "xaxis" => %{
         "categories" => categories,
-        "labels" => %{"style" => %{"colors" => "#a3a3a3", "fontSize" => "11px"}}
+        "labels" => %{
+          "trim" => true,
+          "style" => %{"colors" => "#a3a3a3", "fontSize" => "10px"}
+        }
       },
       "yaxis" => %{
         "labels" => %{
-          "maxWidth" => 160,
-          "style" => %{"colors" => "#a3a3a3", "fontSize" => "11px"}
+          "maxWidth" => 220,
+          "style" => %{"colors" => "#a3a3a3", "fontSize" => "10px"}
         }
       },
       "colors" => [color],
       "legend" => %{"show" => false},
-      "grid" => %{"padding" => %{"left" => 12, "right" => 8, "top" => 4, "bottom" => 6}}
+      "grid" => %{"padding" => %{"left" => 8, "right" => 10, "top" => 6, "bottom" => 8}}
     })
   end
+
+  defp bar_height_percent(n) when n <= 1, do: "78%"
+  defp bar_height_percent(n) when n <= 4, do: "72%"
+  defp bar_height_percent(n) when n <= 10, do: "68%"
+  defp bar_height_percent(_n), do: "62%"
 
   def pvc_storage_class_pie(labels, series) do
     {labels, series, pie_colors} =
@@ -293,18 +338,28 @@ defmodule KubevirtTools.DashboardCharts do
   end
 
   def node_load_placeholder(categories, values) do
+    n = length(categories)
+    h = max(220, node_horizontal_chart_height_px(n))
+
     chart_with_opts(%{
-      "chart" => %{"type" => "bar", "height" => 220},
+      "chart" => %{"type" => "bar", "height" => h},
       "series" => [%{"name" => "Nodes", "data" => values}],
       "plotOptions" => %{
-        "bar" => %{"horizontal" => true, "borderRadius" => 3, "barHeight" => "72%"}
+        "bar" => %{
+          "horizontal" => true,
+          "borderRadius" => 3,
+          "barHeight" => bar_height_percent(n)
+        }
       },
       "xaxis" => %{
         "categories" => categories,
         "labels" => %{"style" => %{"colors" => "#a3a3a3", "fontSize" => "11px"}}
       },
       "yaxis" => %{
-        "labels" => %{"maxWidth" => 72, "style" => %{"colors" => "#a3a3a3", "fontSize" => "11px"}}
+        "labels" => %{
+          "maxWidth" => 120,
+          "style" => %{"colors" => "#a3a3a3", "fontSize" => "11px"}
+        }
       },
       "colors" => [@colors.violet],
       "legend" => %{"show" => false},

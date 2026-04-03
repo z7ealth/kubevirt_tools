@@ -12,6 +12,7 @@ defmodule KubevirtTools.Application do
       {DNSCluster, query: Application.get_env(:kubevirt_tools, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: KubevirtTools.PubSub},
       KubevirtTools.KubeconfigStore,
+      KubevirtTools.PrometheusMetricsServer,
       KubevirtToolsWeb.Endpoint
     ]
 

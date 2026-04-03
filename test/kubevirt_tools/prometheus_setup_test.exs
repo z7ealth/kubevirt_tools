@@ -7,11 +7,10 @@ defmodule KubevirtTools.PrometheusSetupTest do
     :ok
   end
 
-  test "base_url falls back to kube-prometheus-stack-style default" do
+  test "base_url falls back to localhost Prometheus default" do
     System.delete_env("PROMETHEUS_URL")
 
-    assert KubevirtTools.PrometheusSetup.base_url() ==
-             "http://prometheus-k8s.monitoring.svc.cluster.local:9090"
+    assert KubevirtTools.PrometheusSetup.base_url() == "http://localhost:9090"
   end
 
   test "base_url reads PROMETHEUS_URL when set" do

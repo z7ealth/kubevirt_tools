@@ -14,6 +14,17 @@ defmodule KubevirtToolsWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # No `accepts` plug — Prometheus scrapers use openmetrics / text Accept headers.
+  pipeline :prometheus_metrics do
+  end
+
+  # Prometheus scrape target (no CSRF / session)
+  scope "/", KubevirtToolsWeb do
+    pipe_through :prometheus_metrics
+
+    get "/metrics", PrometheusMetricsController, :index
+  end
+
   scope "/", KubevirtToolsWeb do
     pipe_through :browser
 

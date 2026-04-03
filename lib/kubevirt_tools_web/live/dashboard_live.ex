@@ -8,17 +8,32 @@ defmodule KubevirtToolsWeb.DashboardLive do
   alias KubevirtTools.DashboardCharts
   alias KubevirtTools.KubeVirt
   alias KubevirtTools.KubeconfigStore
+  alias KubevirtTools.PrometheusClient
+  alias KubevirtTools.PrometheusMetricsServer
   alias KubevirtTools.PrometheusSetup
 
   @impl true
   def mount(_params, _session, socket) do
     token = socket.assigns.kubeconfig_token
 
+    socket =
+      socket
+      |> assign(:page_title, "Dashboard")
+      |> assign(:current_scope, %{label: "Cluster session"})
+      |> assign(:active_tab, :dashboard)
+      |> assign(:prometheus_live, nil)
+
+    socket =
+      if connected?(socket) do
+        Phoenix.PubSub.subscribe(KubevirtTools.PubSub, PrometheusMetricsServer.topic())
+
+        assign(socket, :prometheus_live, PrometheusMetricsServer.get_latest())
+      else
+        socket
+      end
+
     {:ok,
      socket
-     |> assign(:page_title, "Dashboard")
-     |> assign(:current_scope, %{label: "Cluster session"})
-     |> assign(:active_tab, :dashboard)
      |> assign_async(:kubevirt, fn -> load_kubevirt(token) end)}
   end
 
@@ -42,6 +57,11 @@ defmodule KubevirtToolsWeb.DashboardLive do
     {:noreply,
      socket
      |> assign_async(:kubevirt, fn -> load_kubevirt(token) end)}
+  end
+
+  @impl true
+  def handle_info({:prometheus_metrics, msg}, socket) do
+    {:noreply, assign(socket, :prometheus_live, msg)}
   end
 
   @impl true
@@ -101,7 +121,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
               </div>
             </:failed>
 
-            <% m = metrics(data) %>
+            <% m = metrics(data, @prometheus_live) %>
             <% snap = to_string(data.snapshot_at) %>
             <.daisy_tabs
               id="kubevirt-dashboard-tabs"
@@ -128,6 +148,17 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     </span>
                   </div>
 
+                  <div
+                    id="dashboard-prometheus-status"
+                    class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-base-300/60 bg-base-200/25 px-3 py-2.5 sm:px-4"
+                  >
+                    <.prometheus_connection_status
+                      connected?={m.prometheus_ok?}
+                      url={m.prometheus_url}
+                      poll_caption={m.prometheus_poll_caption}
+                    />
+                  </div>
+
                   <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7 gap-2 sm:gap-3">
                     <.stat_tile label="Total VMs" value={m.total_vms} highlight={:neutral} />
                     <.stat_tile label="Running" value={m.running} highlight={:success} />
@@ -142,16 +173,16 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     <.stat_tile label="Running VMIs" value={m.vmi_running} highlight={:success} />
                   </div>
 
-                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 max-w-2xl">
                     <%= if m.usage_cpu_overlay do %>
                       <.usage_stat_placeholder
                         id="dashboard-usage-cpu-setup"
-                        label="Node CPU usage"
+                        label="Cluster CPU usage"
                         message={m.usage_cpu_overlay}
                       />
                     <% else %>
                       <.stat_tile
-                        label="Node CPU usage"
+                        label="Cluster CPU usage"
                         value={m.usage_cpu_value}
                         sub={m.usage_cpu_sub}
                         highlight={m.usage_cpu_highlight}
@@ -160,29 +191,15 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     <%= if m.usage_mem_overlay do %>
                       <.usage_stat_placeholder
                         id="dashboard-usage-mem-setup"
-                        label="Node memory usage"
+                        label="Cluster memory usage"
                         message={m.usage_mem_overlay}
                       />
                     <% else %>
                       <.stat_tile
-                        label="Node memory usage"
+                        label="Cluster memory usage"
                         value={m.usage_mem_value}
                         sub={m.usage_mem_sub}
                         highlight={m.usage_mem_highlight}
-                      />
-                    <% end %>
-                    <%= if m.usage_storage_overlay do %>
-                      <.usage_stat_placeholder
-                        id="dashboard-usage-storage-setup"
-                        label="Cluster storage"
-                        message={m.usage_storage_overlay}
-                      />
-                    <% else %>
-                      <.stat_tile
-                        label="Cluster storage"
-                        value={m.usage_storage_value}
-                        sub={m.usage_storage_sub}
-                        highlight={m.usage_storage_highlight}
                       />
                     <% end %>
                   </div>
@@ -196,17 +213,17 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       opts={DashboardCharts.vm_status_donut(m.running, m.stopped, m.other_vm)}
                     />
                     <.apex_chart
-                      class="min-w-0"
+                      class="min-w-0 max-h-[min(85vh,720px)] overflow-y-auto"
                       id={"chart-vm-per-node-#{snap}"}
                       title="VMIs per node"
-                      height="200px"
+                      height={"#{m.node_resource_chart_height_px}px"}
                       opts={DashboardCharts.vms_per_node_bar(m.node_labels, m.node_vm_counts)}
                     />
                     <.apex_chart
-                      class="min-w-0"
+                      class="min-w-0 max-h-[min(85vh,720px)] overflow-y-auto"
                       id={"chart-vcpu-node-#{snap}"}
                       title="vCPU per node (VMIs)"
-                      height="200px"
+                      height={"#{m.node_resource_chart_height_px}px"}
                       opts={
                         DashboardCharts.horizontal_bar(
                           "vCPUs",
@@ -217,10 +234,10 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       }
                     />
                     <.apex_chart
-                      class="min-w-0"
+                      class="min-w-0 max-h-[min(85vh,720px)] overflow-y-auto"
                       id={"chart-mem-node-#{snap}"}
                       title="Memory per node (MiB, guest)"
-                      height="200px"
+                      height={"#{m.node_resource_chart_height_px}px"}
                       opts={
                         DashboardCharts.horizontal_bar(
                           "MiB",
@@ -269,7 +286,22 @@ defmodule KubevirtToolsWeb.DashboardLive do
                         )
                       }
                     />
-                    <.node_load_chart_placeholder id={"node-load-chart-placeholder-#{snap}"} />
+                    <%= if m.node_load_from_prometheus? do %>
+                      <.apex_chart
+                        class="min-w-0 max-h-[min(85vh,720px)] overflow-y-auto"
+                        id={"chart-node-load-#{m.prom_chart_rev}"}
+                        title="Node CPU by utilization (Prometheus)"
+                        height={"#{m.node_load_chart_height_px}px"}
+                        opts={
+                          DashboardCharts.node_load_placeholder(
+                            ["0-25%", "25-50%", "50-75%", "75-100%"],
+                            m.node_load_buckets
+                          )
+                        }
+                      />
+                    <% else %>
+                      <.node_load_chart_placeholder id={"node-load-chart-placeholder-#{snap}"} />
+                    <% end %>
                     <.apex_chart
                       class="min-w-0"
                       id={"chart-health-#{snap}"}
@@ -372,6 +404,40 @@ defmodule KubevirtToolsWeb.DashboardLive do
       </p>
       <p class={["text-xl font-semibold tabular-nums mt-1", @value_class]}>{@value}</p>
       <p :if={@sub} class="text-xs text-base-content/45 mt-0.5">{@sub}</p>
+    </div>
+    """
+  end
+
+  attr :connected?, :boolean, required: true
+  attr :url, :string, required: true
+  attr :poll_caption, :string, required: true
+
+  defp prometheus_connection_status(assigns) do
+    ~H"""
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 min-w-0 w-full">
+      <span class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/55 shrink-0 leading-snug">
+        Prometheus
+      </span>
+      <%= if @connected? do %>
+        <%!-- DaisyUI status + ping — https://daisyui.com/components/status/ --%>
+        <div class="inline-grid *:[grid-area:1/1] place-items-center shrink-0" aria-hidden="true">
+          <div class="status status-success animate-ping"></div>
+          <div class="status status-success"></div>
+        </div>
+        <span class="text-sm font-medium text-success shrink-0 leading-snug">Connected</span>
+      <% else %>
+        <div class="status status-warning shrink-0" aria-hidden="true"></div>
+        <span class="text-sm font-medium text-warning shrink-0 leading-snug">Not connected</span>
+      <% end %>
+      <div class="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <span class="text-xs leading-normal text-base-content/45 shrink-0">{@poll_caption}</span>
+        <span
+          class="inline-block max-w-full min-w-0 truncate text-xs leading-normal font-mono text-base-content/40 sm:max-w-md"
+          title={@url}
+        >
+          {@url}
+        </span>
+      </div>
     </div>
     """
   end
@@ -572,6 +638,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
       {pvcs, pvc_err} = safe_list(&ClusterInventory.list_pvcs/1, conn)
       {node_metrics, metrics_err} = safe_list(&ClusterMetrics.list_node_metrics/1, conn)
 
+      prometheus = prometheus_bootstrap_from_server_or_client()
+
       {:ok,
        %{
          kubevirt: %{
@@ -583,6 +651,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
            pvcs: pvcs,
            node_metrics: node_metrics,
            metrics_error: metrics_err,
+           prometheus: prometheus,
            vm_error: vm_err,
            vmi_error: vmi_err,
            node_error: node_err,
@@ -606,7 +675,40 @@ defmodule KubevirtToolsWeb.DashboardLive do
     end
   end
 
-  defp metrics(data) do
+  defp prometheus_bootstrap_from_server_or_client do
+    case PrometheusMetricsServer.get_latest() do
+      {:ok, snap} ->
+        Map.put(snap, :ok, true)
+
+      {:error, reason} when is_binary(reason) ->
+        %{
+          ok: false,
+          url: PrometheusSetup.base_url(),
+          sum_up: nil,
+          prometheus_version: nil,
+          node_detail: nil,
+          error: reason
+        }
+
+      nil ->
+        case PrometheusClient.snapshot() do
+          {:ok, snap} ->
+            Map.put(snap, :ok, true)
+
+          {:error, reason} ->
+            %{
+              ok: false,
+              url: PrometheusSetup.base_url(),
+              sum_up: nil,
+              prometheus_version: nil,
+              node_detail: nil,
+              error: reason
+            }
+        end
+    end
+  end
+
+  defp metrics(data, prom_live) do
     vms = data.vms || []
     vmis = data.vmis || []
     nodes = data.nodes || []
@@ -615,11 +717,10 @@ defmodule KubevirtToolsWeb.DashboardLive do
     {running, stopped, other} = vm_status_counts(vms)
     {vmi_run, vmi_not_run, vmi_other} = vmi_phase_counts(vmis)
 
-    {labels, counts, vcpus, mems} =
-      case node_aggregates(vmis) do
-        {[], [], [], []} -> {["—"], [0], [0], [0]}
-        tuple -> tuple
-      end
+    {labels, counts, vcpus, mems} = node_resource_rows(nodes, vmis)
+
+    node_resource_chart_height_px =
+      DashboardCharts.node_horizontal_chart_height_px(length(labels))
 
     {pvc_bound, pvc_pending, pvc_lost, pvc_other} = pvc_status_counts(pvcs)
 
@@ -635,13 +736,57 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
     node_metrics = Map.get(data, :node_metrics) || []
     metrics_err = Map.get(data, :metrics_error)
+
+    prom_poll_ms =
+      Application.get_env(:kubevirt_tools, :prometheus_poll_interval_ms, 300_000)
+
+    prom_poll_label = prometheus_poll_interval_label(prom_poll_ms)
+
+    embed =
+      Map.get(data, :prometheus) ||
+        %{ok: false, error: "unavailable", url: PrometheusSetup.base_url()}
+
+    prom = resolve_prometheus_embed(embed, prom_live)
+
+    prom_ok? = prom[:ok] == true
+    prom_url = prom[:url] || PrometheusSetup.base_url()
+    prom_poll_caption = "Polled every #{prom_poll_label}"
+
     usage = ClusterMetrics.usage_summary(nodes, node_metrics, pvcs)
-    usage_cpu_overlay = usage_node_metric_overlay(usage.cpu, metrics_err)
-    usage_mem_overlay = usage_node_metric_overlay(usage.memory, metrics_err)
-    usage_storage_overlay = usage_storage_overlay_card(usage.storage)
-    {u_cpu_val, u_cpu_sub, u_cpu_hi} = usage_card_fields(usage.cpu)
-    {u_mem_val, u_mem_sub, u_mem_hi} = usage_card_fields(usage.memory)
-    {u_sto_val, u_sto_sub, u_sto_hi} = usage_card_fields(usage.storage)
+
+    prom_detail =
+      prom[:node_detail] ||
+        %{cpu_cluster_pct: nil, mem_cluster_pct: nil, load_buckets: [0, 0, 0, 0]}
+
+    usage_cpu_eff = override_usage_from_prometheus(usage.cpu, prom_detail[:cpu_cluster_pct])
+    usage_mem_eff = override_usage_from_prometheus(usage.memory, prom_detail[:mem_cluster_pct])
+
+    usage_cpu_overlay =
+      case usage_cpu_eff do
+        {:ok, _, _} -> nil
+        {:unavailable, _, _} -> usage_node_metric_overlay(usage.cpu, metrics_err)
+      end
+
+    usage_mem_overlay =
+      case usage_mem_eff do
+        {:ok, _, _} -> nil
+        {:unavailable, _, _} -> usage_node_metric_overlay(usage.memory, metrics_err)
+      end
+
+    {u_cpu_val, u_cpu_sub, u_cpu_hi} = usage_card_fields(usage_cpu_eff)
+    {u_mem_val, u_mem_sub, u_mem_hi} = usage_card_fields(usage_mem_eff)
+
+    load_buckets = prom_detail[:load_buckets] || [0, 0, 0, 0]
+    node_load_from_prometheus? = Enum.sum(load_buckets) > 0
+
+    prom_chart_rev =
+      case prom_live do
+        {:ok, %{fetched_at: t}} -> t
+        _ -> Map.get(data, :snapshot_at, 0)
+      end
+
+    node_load_chart_height_px =
+      max(220, DashboardCharts.node_horizontal_chart_height_px(4))
 
     %{
       total_vms: length(vms),
@@ -659,6 +804,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       node_vm_counts: counts,
       node_vcpu_counts: vcpus,
       node_mem_mib: mems,
+      node_resource_chart_height_px: node_resource_chart_height_px,
       pvc_bound: pvc_bound,
       pvc_pending: pvc_pending,
       pvc_lost: pvc_lost,
@@ -674,14 +820,60 @@ defmodule KubevirtToolsWeb.DashboardLive do
       usage_mem_value: u_mem_val,
       usage_mem_sub: u_mem_sub,
       usage_mem_highlight: u_mem_hi,
-      usage_storage_value: u_sto_val,
-      usage_storage_sub: u_sto_sub,
-      usage_storage_highlight: u_sto_hi,
       usage_cpu_overlay: usage_cpu_overlay,
       usage_mem_overlay: usage_mem_overlay,
-      usage_storage_overlay: usage_storage_overlay
+      prometheus_ok?: prom_ok?,
+      prometheus_url: prom_url,
+      prometheus_poll_caption: prom_poll_caption,
+      node_load_from_prometheus?: node_load_from_prometheus?,
+      node_load_buckets: load_buckets,
+      prom_chart_rev: prom_chart_rev,
+      node_load_chart_height_px: node_load_chart_height_px
     }
   end
+
+  defp prometheus_poll_interval_label(ms)
+       when is_integer(ms) and ms > 0 do
+    cond do
+      rem(ms, 60_000) == 0 and ms >= 60_000 ->
+        "#{div(ms, 60_000)} min"
+
+      rem(ms, 1_000) == 0 and ms >= 1_000 ->
+        "#{div(ms, 1_000)} s"
+
+      true ->
+        "#{ms} ms"
+    end
+  end
+
+  defp resolve_prometheus_embed(embed, prom_live) do
+    case prom_live do
+      nil ->
+        embed
+
+      {:ok, live} ->
+        Map.put(live, :ok, true)
+
+      {:error, reason} when is_binary(reason) ->
+        %{
+          ok: false,
+          error: reason,
+          url: Map.get(embed, :url) || PrometheusSetup.base_url(),
+          sum_up: nil,
+          prometheus_version: nil,
+          node_detail: %{cpu_cluster_pct: nil, mem_cluster_pct: nil, load_buckets: [0, 0, 0, 0]}
+        }
+    end
+  end
+
+  defp override_usage_from_prometheus({:ok, _, _} = ok, _), do: ok
+
+  defp override_usage_from_prometheus({:unavailable, _, _}, pct) when is_float(pct) do
+    p = pct |> round() |> min(100) |> max(0)
+    {:ok, "#{p}%", "from Prometheus (cluster avg.)"}
+  end
+
+  defp override_usage_from_prometheus(other, _), do: other
 
   defp usage_node_metric_overlay({:ok, _, _}, _metrics_err), do: nil
 
@@ -786,15 +978,6 @@ defmodule KubevirtToolsWeb.DashboardLive do
     join_prometheus_hint(other)
   end
 
-  defp usage_storage_overlay_card({:ok, _, _}), do: nil
-
-  defp usage_storage_overlay_card({:unavailable, _, hint}) do
-    join_prometheus_hint(
-      "This card needs PVC storage requests and/or node allocatable ephemeral-storage. (#{hint}) " <>
-        "Use Prometheus to scrape storage- and kubelet-related metrics for richer dashboards."
-    )
-  end
-
   defp join_prometheus_hint(primary) when is_binary(primary) do
     String.trim_trailing(primary) <> " " <> PrometheusSetup.endpoint_env_hint()
   end
@@ -844,29 +1027,70 @@ defmodule KubevirtToolsWeb.DashboardLive do
     end
   end
 
-  defp node_aggregates(vmis) do
+  defp node_resource_rows(nodes, vmis) do
     grouped =
       Enum.group_by(vmis, fn vmi ->
         n = vmi_node(vmi)
         if n in [nil, "", "—"], do: "Unscheduled", else: n
       end)
 
+    cluster_names =
+      nodes
+      |> Enum.map(&get_in(&1, ["metadata", "name"]))
+      |> Enum.filter(&is_binary/1)
+      |> Enum.sort()
+
+    cluster_set = MapSet.new(cluster_names)
+    grouped_keys = grouped |> Map.keys() |> MapSet.new()
+
+    orphans =
+      grouped_keys
+      |> MapSet.difference(cluster_set)
+      |> MapSet.delete("Unscheduled")
+      |> Enum.sort()
+
+    has_unsched? = match?([_ | _], Map.get(grouped, "Unscheduled", []))
+
+    labels =
+      cluster_names ++ orphans ++ if(has_unsched?, do: ["Unscheduled"], else: [])
+
+    cond do
+      labels == [] and grouped == %{} ->
+        {["—"], [0], [0], [0]}
+
+      labels == [] ->
+        fallback_node_rows_from_grouped(grouped)
+
+      true ->
+        counts = Enum.map(labels, fn l -> length(Map.get(grouped, l, [])) end)
+
+        vcpus =
+          Enum.map(labels, fn l ->
+            grouped |> Map.get(l, []) |> Enum.map(&vmi_vcpu_cores/1) |> Enum.sum()
+          end)
+
+        mems =
+          Enum.map(labels, fn l ->
+            grouped |> Map.get(l, []) |> Enum.map(&vmi_memory_mib/1) |> Enum.sum()
+          end)
+
+        {labels, counts, vcpus, mems}
+    end
+  end
+
+  defp fallback_node_rows_from_grouped(grouped) do
     labels = grouped |> Map.keys() |> Enum.sort()
 
     counts = Enum.map(labels, fn l -> length(Map.get(grouped, l, [])) end)
 
     vcpus =
       Enum.map(labels, fn l ->
-        Map.get(grouped, l, [])
-        |> Enum.map(&vmi_vcpu_cores/1)
-        |> Enum.sum()
+        grouped |> Map.get(l, []) |> Enum.map(&vmi_vcpu_cores/1) |> Enum.sum()
       end)
 
     mems =
       Enum.map(labels, fn l ->
-        Map.get(grouped, l, [])
-        |> Enum.map(&vmi_memory_mib/1)
-        |> Enum.sum()
+        grouped |> Map.get(l, []) |> Enum.map(&vmi_memory_mib/1) |> Enum.sum()
       end)
 
     {labels, counts, vcpus, mems}

@@ -10,6 +10,12 @@ import Config
 config :kubevirt_tools,
   generators: [timestamp_type: :utc_datetime]
 
+# Instant-query timeout when calling the Prometheus HTTP API from the dashboard.
+config :kubevirt_tools, :prometheus_client_timeout_ms, 5_000
+
+# How often `PrometheusMetricsServer` polls Prometheus and pushes updates to LiveViews (5 minutes).
+config :kubevirt_tools, :prometheus_poll_interval_ms, 300_000
+
 # Configure the endpoint
 config :kubevirt_tools, KubevirtToolsWeb.Endpoint,
   url: [host: "localhost"],

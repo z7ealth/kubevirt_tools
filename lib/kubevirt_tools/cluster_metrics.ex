@@ -46,7 +46,7 @@ defmodule KubevirtTools.ClusterMetrics do
   defp metrics_version_missing?(_), do: false
 
   @doc """
-  Builds display fields for the three usage cards: CPU %, memory %, storage % or PVC-based fallback.
+  Builds cluster-wide usage fields: CPU %, memory %, and storage % (PVC / ephemeral fallback).
   """
   def usage_summary(nodes, node_metrics_items, pvcs)
       when is_list(nodes) and is_list(node_metrics_items) and is_list(pvcs) do

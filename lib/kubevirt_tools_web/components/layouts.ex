@@ -55,11 +55,6 @@ defmodule KubevirtToolsWeb.Layouts do
         </div>
         <div class="flex-none">
           <ul class="flex items-center gap-1 sm:gap-2">
-            <li>
-              <.link navigate={~p"/dashboard"} class="btn btn-ghost btn-sm">
-                Dashboard
-              </.link>
-            </li>
             <li :if={@current_scope}>
               <.link href={~p"/session"} method="delete" class="btn btn-ghost btn-sm gap-1">
                 <.icon name="hero-arrow-right-on-rectangle" class="size-4 opacity-70" /> Sign out
