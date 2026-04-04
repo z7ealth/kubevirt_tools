@@ -36,6 +36,10 @@ defmodule KubevirtToolsWeb.Layouts do
     values: [:full, :theme_only],
     doc: ":theme_only shows only the theme toggle (e.g. sign-in page)"
 
+  attr :main_class, :any,
+    default: nil,
+    doc: "extra classes merged onto <main> (e.g. full-bleed welcome screen)"
+
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -93,7 +97,10 @@ defmodule KubevirtToolsWeb.Layouts do
         </div>
       </header>
 
-      <main class="flex min-h-0 flex-1 flex-col space-y-4 px-4 py-10 sm:px-8 lg:px-14 overflow-x-hidden">
+      <main class={[
+        "flex min-h-0 flex-1 flex-col space-y-4 px-4 py-10 sm:px-8 lg:px-14 overflow-x-hidden",
+        @main_class
+      ]}>
         {render_slot(@inner_block)}
       </main>
 

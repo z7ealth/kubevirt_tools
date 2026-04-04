@@ -17,7 +17,7 @@ defmodule KubevirtToolsWeb.SessionController do
                 conn
                 |> put_session(@session_key, token)
                 |> put_flash(:info, "Connected to the cluster.")
-                |> redirect(to: ~p"/dashboard")
+                |> redirect(to: ~p"/welcome")
 
               {:error, %K8s.Conn.Error{} = err} ->
                 conn

@@ -36,6 +36,7 @@ defmodule KubevirtToolsWeb.Router do
 
     live_session :kube do
       live "/login", LoginLive
+      live "/welcome", WelcomeLive
       live "/dashboard", DashboardLive
     end
 
