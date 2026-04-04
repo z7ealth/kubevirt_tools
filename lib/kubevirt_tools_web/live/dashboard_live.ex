@@ -26,6 +26,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       |> assign(:current_scope, %{})
       |> assign(:active_tab, :dashboard)
       |> assign(:prometheus_live, nil)
+      |> assign(:prometheus_retrying, false)
 
     socket =
       if connected?(socket) do
@@ -61,6 +62,23 @@ defmodule KubevirtToolsWeb.DashboardLive do
     {:noreply,
      socket
      |> assign_async(:kubevirt, fn -> load_kubevirt(token) end)}
+  end
+
+  @impl true
+  def handle_event("retry_prometheus", _params, socket) do
+    socket = assign(socket, :prometheus_retrying, true)
+
+    last =
+      try do
+        PrometheusMetricsServer.poll_now()
+      rescue
+        e -> {:error, Exception.message(e)}
+      end
+
+    {:noreply,
+     socket
+     |> assign(:prometheus_live, last)
+     |> assign(:prometheus_retrying, false)}
   end
 
   @impl true
@@ -168,6 +186,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       connected?={m.prometheus_ok?}
                       url={m.prometheus_url}
                       poll_caption={m.prometheus_poll_caption}
+                      retrying?={@prometheus_retrying}
                     />
                   </div>
 
@@ -565,6 +584,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :connected?, :boolean, required: true
   attr :url, :string, required: true
   attr :poll_caption, :string, required: true
+  attr :retrying?, :boolean, default: false
 
   defp prometheus_connection_status(assigns) do
     ~H"""
@@ -582,6 +602,22 @@ defmodule KubevirtToolsWeb.DashboardLive do
       <% else %>
         <div class="status status-warning shrink-0" aria-hidden="true"></div>
         <span class="text-sm font-medium text-warning shrink-0 leading-snug">Not connected</span>
+        <button
+          type="button"
+          phx-click="retry_prometheus"
+          id="dashboard-prometheus-retry"
+          disabled={@retrying?}
+          class={[
+            "btn btn-outline btn-primary btn-xs gap-1 shrink-0",
+            @retrying? && "btn-disabled pointer-events-none"
+          ]}
+          title="Fetch Prometheus now (resets the poll timer)"
+        >
+          <.icon
+            name="hero-arrow-path"
+            class={["size-3.5", @retrying? && "motion-safe:animate-spin"]}
+          /> Retry
+        </button>
       <% end %>
       <div class="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
         <span class="text-xs leading-normal text-base-content/45 shrink-0">{@poll_caption}</span>
