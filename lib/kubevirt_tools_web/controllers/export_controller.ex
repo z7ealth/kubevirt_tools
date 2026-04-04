@@ -3,23 +3,23 @@ defmodule KubevirtToolsWeb.ExportController do
 
   alias KubevirtTools.ExportFilename
   alias KubevirtTools.K8sConn
-  alias KubevirtTools.KubeVirt
   alias KubevirtTools.KubeconfigStore
   alias KubevirtTools.VmExport
+  alias KubevirtTools.VmExport.Bundle
 
   plug :require_kube_session
 
   @session_key "kubevirt_token"
 
   def vms_csv(conn, _params) do
-    case load_vms_and_vmis(conn.assigns.kubevirt_token) do
-      {:ok, vms, vmis, filename_stem} ->
+    case load_export_bundle(conn.assigns.kubevirt_token) do
+      {:ok, bundle, filename_stem} ->
         filename = "#{filename_stem}.csv"
 
         conn
         |> put_resp_content_type("text/csv; charset=utf-8")
         |> put_resp_header("content-disposition", content_disposition_attachment(filename))
-        |> send_resp(200, VmExport.to_csv(vms, vmis))
+        |> send_resp(200, VmExport.to_csv(bundle))
 
       {:error, _} ->
         conn
@@ -29,11 +29,11 @@ defmodule KubevirtToolsWeb.ExportController do
   end
 
   def vms_xlsx(conn, _params) do
-    case load_vms_and_vmis(conn.assigns.kubevirt_token) do
-      {:ok, vms, vmis, filename_stem} ->
+    case load_export_bundle(conn.assigns.kubevirt_token) do
+      {:ok, bundle, filename_stem} ->
         filename = "#{filename_stem}.xlsx"
 
-        case VmExport.to_xlsx(vms, vmis) do
+        case VmExport.to_xlsx(bundle) do
           {:ok, bin} ->
             conn
             |> put_resp_content_type(
@@ -77,12 +77,12 @@ defmodule KubevirtToolsWeb.ExportController do
     end
   end
 
-  defp load_vms_and_vmis(token) do
+  defp load_export_bundle(token) do
     with {:ok, yaml} <- KubeconfigStore.get(token),
          {:ok, k8s} <- K8sConn.from_kubeconfig_string(yaml),
-         {:ok, vms} <- KubeVirt.list_virtual_machines(k8s),
-         {:ok, vmis} <- KubeVirt.list_virtual_machine_instances(k8s) do
-      {:ok, vms, vmis, ExportFilename.stem(yaml)}
+         {:ok, bundle} <- Bundle.fetch(k8s) do
+      cluster = Map.get(bundle.meta, :cluster_name) || ""
+      {:ok, bundle, ExportFilename.stem(cluster)}
     else
       :error -> {:error, :bad_token}
       {:error, _} = err -> err

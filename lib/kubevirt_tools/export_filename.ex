@@ -2,12 +2,17 @@ defmodule KubevirtTools.ExportFilename do
   @moduledoc false
 
   @doc """
-  Filename stem (no extension): `current_context_YYYYMMDD_HHMMSS` for the given instant (UTC calendar fields).
+  Filename stem (no extension): `kubevirt_tools_<cluster_name>_YYYYMMDD_HHMMSS` (UTC).
   """
-  def stem(yaml, at \\ DateTime.utc_now())
+  def stem(cluster_name, at \\ DateTime.utc_now())
 
-  def stem(yaml, %DateTime{} = at) when is_binary(yaml) do
-    ctx = current_context_from_kubeconfig(yaml)
+  def stem(cluster_name, %DateTime{} = at) do
+    name =
+      cond do
+        is_binary(cluster_name) -> cluster_name
+        cluster_name == nil -> ""
+        true -> to_string(cluster_name)
+      end
 
     utc =
       case DateTime.shift_zone(at, "Etc/UTC") do
@@ -16,20 +21,8 @@ defmodule KubevirtTools.ExportFilename do
       end
 
     dt = Calendar.strftime(utc, "%Y%m%d_%H%M%S")
-    "#{sanitize_filename_segment(ctx)}_#{dt}"
-  end
-
-  defp current_context_from_kubeconfig(yaml) do
-    case YamlElixir.read_from_string(yaml) do
-      {:ok, map} when is_map(map) ->
-        case Map.get(map, "current-context") do
-          ctx when is_binary(ctx) and ctx != "" -> ctx
-          _ -> "unknown-context"
-        end
-
-      _ ->
-        "unknown-context"
-    end
+    seg = sanitize_filename_segment(name)
+    "kubevirt_tools_#{seg}_#{dt}"
   end
 
   defp sanitize_filename_segment(name) when is_binary(name) do

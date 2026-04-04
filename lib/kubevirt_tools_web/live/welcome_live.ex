@@ -90,25 +90,8 @@ defmodule KubevirtToolsWeb.WelcomeLive do
               Welcome
             </span>
           </h1>
-          <p class="welcome-screen__tag mt-6 max-w-sm text-sm leading-relaxed text-base-content/55 sm:text-base">
-            Cluster-wide virtualization insights
-          </p>
           <p class="welcome-screen__version mt-2 text-xs tabular-nums text-base-content/40">
             v{@app_version}
-          </p>
-
-          <div class="welcome-screen__actions mt-10 flex flex-wrap items-center justify-center gap-3">
-            <button
-              type="button"
-              phx-click="skip_welcome"
-              id="welcome-skip-button"
-              class="btn btn-primary btn-sm gap-2 shadow-lg shadow-primary/20 transition hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <.icon name="hero-arrow-right" class="size-4" /> Continue to dashboard
-            </button>
-          </div>
-          <p class="welcome-screen__hint mt-4 text-xs text-base-content/40">
-            Continuing automatically in a few seconds…
           </p>
         </div>
       </div>

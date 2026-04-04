@@ -36,13 +36,13 @@ defmodule KubevirtTools.VmExportTest do
     "status" => %{"phase" => "Running", "nodeName" => "node-a"}
   }
 
-  test "to_csv includes header and escaped fields" do
+  test "to_csv uses vInfo sheet columns" do
     csv = VmExport.to_csv([@vm], [@vmi])
-    assert String.starts_with?(csv, "Namespace,Name,UID")
-    assert String.contains?(csv, "Boot mode")
-    assert String.contains?(csv, "BIOS")
-    refute String.contains?(csv, "Run strategy")
-    assert String.contains?(csv, "ns1")
+    assert String.starts_with?(csv, "VM,Memory Limits")
+    assert String.contains?(csv, "Cores,Sockets,Total vCPUs")
+    assert String.contains?(csv, ",2,1,2,")
+    assert String.contains?(csv, "Powerstate")
+    assert String.contains?(csv, "Running")
     assert String.contains?(csv, "my-vm")
     assert String.contains?(csv, "node-a")
   end
@@ -65,17 +65,17 @@ defmodule KubevirtTools.VmExportTest do
     assert VmExport.boot_mode_label(secure_vm) == "UEFI (Secure Boot)"
   end
 
-  test "to_xlsx produces non-empty binary" do
+  test "to_xlsx produces multi-sheet workbook" do
     assert {:ok, bin} = VmExport.to_xlsx([@vm], [@vmi])
     assert is_binary(bin)
-    assert byte_size(bin) > 100
+    assert byte_size(bin) > 2_000
     # ZIP local file header signature
     assert binary_part(bin, 0, 2) == "PK"
   end
 
   test "empty lists still produce valid csv header" do
     csv = VmExport.to_csv([], [])
-    assert String.contains?(csv, "Namespace")
+    assert String.contains?(csv, "VM,Memory Limits")
     refute String.contains?(csv, "\n\n")
   end
 end
