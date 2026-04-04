@@ -6,6 +6,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   alias KubevirtTools.ClusterInventory
   alias KubevirtTools.ClusterMetrics
   alias KubevirtTools.DashboardCharts
+  alias KubevirtTools.K8sConn
   alias KubevirtTools.KubeVirt
   alias KubevirtTools.KubeconfigStore
   alias KubevirtTools.VmExport
@@ -937,7 +938,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   defp load_kubevirt(token) do
     with {:ok, yaml} <- KubeconfigStore.get(token),
-         {:ok, conn} <- K8s.Conn.from_string(yaml) do
+         {:ok, conn} <- K8sConn.from_kubeconfig_string(yaml) do
       {vms, vm_err} = safe_list(&KubeVirt.list_virtual_machines/1, conn)
       {vmis, vmi_err} = safe_list(&KubeVirt.list_virtual_machine_instances/1, conn)
       {nodes, node_err} = safe_list(&ClusterInventory.list_nodes/1, conn)
