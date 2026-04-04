@@ -66,6 +66,19 @@ defmodule KubevirtToolsWeb.Layouts do
         <div class="flex-none">
           <ul class="flex items-center gap-1 sm:gap-2">
             <li :if={@navbar == :full && @current_scope}>
+              <a
+                href="https://github.com/z7ealth/kubevirt_tools/issues"
+                class="btn btn-ghost btn-sm gap-1"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open GitHub Issues"
+                id="navbar-github-issues-link"
+              >
+                <.icon name="hero-bug-ant" class="size-4 opacity-70" />
+                <span class="hidden sm:inline">Issues</span>
+              </a>
+            </li>
+            <li :if={@navbar == :full && @current_scope}>
               <.link href={~p"/session"} method="delete" class="btn btn-ghost btn-sm gap-1">
                 <.icon name="hero-arrow-right-on-rectangle" class="size-4 opacity-70" /> Sign out
               </.link>
