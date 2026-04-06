@@ -36,12 +36,12 @@ defmodule KubevirtTools.VmExportTest do
     "status" => %{"phase" => "Running", "nodeName" => "node-a"}
   }
 
-  test "to_csv uses vInfo sheet columns" do
+  test "to_csv uses VirtualMachines sheet columns" do
     csv = VmExport.to_csv([@vm], [@vmi])
-    assert String.starts_with?(csv, "VM,Memory Limits")
-    assert String.contains?(csv, "Cores,Sockets,Total vCPUs")
+    assert String.starts_with?(csv, "VM,Memory limit")
+    assert String.contains?(csv, "Cores,Sockets,Total CPUs (guest)")
     assert String.contains?(csv, ",2,1,2,")
-    assert String.contains?(csv, "Powerstate")
+    assert String.contains?(csv, "Printable status")
     assert String.contains?(csv, "Running")
     assert String.contains?(csv, "my-vm")
     assert String.contains?(csv, "node-a")
@@ -75,7 +75,7 @@ defmodule KubevirtTools.VmExportTest do
 
   test "empty lists still produce valid csv header" do
     csv = VmExport.to_csv([], [])
-    assert String.contains?(csv, "VM,Memory Limits")
+    assert String.contains?(csv, "VM,Memory limit")
     refute String.contains?(csv, "\n\n")
   end
 end

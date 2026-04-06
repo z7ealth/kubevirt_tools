@@ -3,7 +3,7 @@ defmodule KubevirtTools.VmTopologyTest do
 
   alias KubevirtTools.VmTopology
 
-  test "build/1 links VMs to hosts via VMI nodeName" do
+  test "build/1 links VMs to nodes via VMI nodeName" do
     data = %{
       nodes: [
         %{"metadata" => %{"name" => "node-a"}},
@@ -28,19 +28,19 @@ defmodule KubevirtTools.VmTopologyTest do
 
     ids = Enum.map(topo["nodes"], & &1["id"])
 
-    assert "host:node-a" in ids
-    assert "host:node-b" in ids
+    assert "node:node-a" in ids
+    assert "node:node-b" in ids
     assert "vm:ns/vm1" in ids
     assert "vm:ns/vm2" in ids
 
     edges = topo["edges"]
-    assert Enum.any?(edges, &(&1["from"] == "host:node-a" and &1["to"] == "vm:ns/vm1"))
-    assert Enum.any?(edges, &(&1["from"] == "host:__unscheduled__" and &1["to"] == "vm:ns/vm2"))
+    assert Enum.any?(edges, &(&1["from"] == "node:node-a" and &1["to"] == "vm:ns/vm1"))
+    assert Enum.any?(edges, &(&1["from"] == "node:__unscheduled__" and &1["to"] == "vm:ns/vm2"))
 
     unsched =
-      Enum.find(topo["nodes"], &(&1["id"] == "host:__unscheduled__"))
+      Enum.find(topo["nodes"], &(&1["id"] == "node:__unscheduled__"))
 
-    assert unsched["hostStatus"] == "unscheduled"
+    assert unsched["nodeScheduling"] == "unscheduled"
   end
 
   test "build/1 treats VM without VMI and no printable as stopped (Unscheduled soft red)" do
@@ -58,7 +58,7 @@ defmodule KubevirtTools.VmTopologyTest do
 
     assert Enum.any?(
              topo["edges"],
-             &(&1["from"] == "host:__unscheduled__" and &1["to"] == "vm:ns/fedora-vm")
+             &(&1["from"] == "node:__unscheduled__" and &1["to"] == "vm:ns/fedora-vm")
            )
   end
 
@@ -96,7 +96,7 @@ defmodule KubevirtTools.VmTopologyTest do
     assert v["vmStatus"] == "stopped"
   end
 
-  test "build/1 adds synthetic host for unknown nodeName" do
+  test "build/1 adds synthetic node vertex for unknown nodeName" do
     data = %{
       nodes: [%{"metadata" => %{"name" => "node-a"}}],
       vms: [%{"metadata" => %{"namespace" => "ns", "name" => "vm1"}}],
@@ -110,6 +110,6 @@ defmodule KubevirtTools.VmTopologyTest do
 
     topo = VmTopology.build(data)
     ids = Enum.map(topo["edges"], & &1["from"]) |> Enum.uniq()
-    assert "host:ghost" in ids
+    assert "node:ghost" in ids
   end
 end

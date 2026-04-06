@@ -2,9 +2,9 @@ defmodule KubevirtTools.VmTopology do
   @moduledoc false
 
   @doc """
-  Builds a JSON-friendly graph for the VM topology view: Kubernetes nodes (hosts),
-  VirtualMachines (linked via matching VMI `nodeName`), and optional synthetic hosts
-  for unscheduled or unknown node names.
+  Builds a JSON-friendly graph for the topology view: Kubernetes **Nodes**,
+  **VirtualMachines** (linked via matching VMI `status.nodeName`), and optional synthetic
+  node vertices for unscheduled VMs or names not present in the Node list.
   """
   @spec build(map()) :: map()
   def build(data) when is_map(data) do
@@ -24,20 +24,25 @@ defmodule KubevirtTools.VmTopology do
 
     cluster_set = MapSet.new(cluster_names)
 
-    host_vertices =
+    node_vertices =
       Enum.map(nodes_k8s, fn node ->
         name = get_in(node, ["metadata", "name"])
         ready = node_ready?(node)
         cordoned = node_cordoned?(node)
 
-        status =
+        scheduling =
           cond do
             not ready -> "not_ready"
             cordoned -> "cordoned"
             true -> "ready"
           end
 
-        %{"id" => "host:" <> name, "label" => name, "group" => "host", "hostStatus" => status}
+        %{
+          "id" => "node:" <> name,
+          "label" => name,
+          "group" => "node",
+          "nodeScheduling" => scheduling
+        }
       end)
 
     vm_vertices =
@@ -45,7 +50,7 @@ defmodule KubevirtTools.VmTopology do
         key = vm_key(vm)
         vmi = Map.get(vmi_by_key, key)
 
-        host =
+        node_name =
           case vmi do
             nil ->
               nil
@@ -62,66 +67,66 @@ defmodule KubevirtTools.VmTopology do
           "label" => vm_name(vm),
           "group" => "vm",
           "vmStatus" => vm_status,
-          "host" => host
+          "nodeName" => node_name
         }
       end)
 
-    referenced_hosts =
+    referenced_node_names =
       vm_vertices
-      |> Enum.map(& &1["host"])
+      |> Enum.map(& &1["nodeName"])
       |> Enum.reject(&is_nil/1)
       |> MapSet.new()
 
-    missing_hosts =
-      referenced_hosts
+    missing_node_names =
+      referenced_node_names
       |> MapSet.difference(cluster_set)
       |> Enum.sort()
 
-    orphan_host_vertices =
-      Enum.map(missing_hosts, fn name ->
+    orphan_node_vertices =
+      Enum.map(missing_node_names, fn name ->
         %{
-          "id" => "host:" <> name,
+          "id" => "node:" <> name,
           "label" => name <> " (unknown)",
-          "group" => "host",
-          "hostStatus" => "not_ready"
+          "group" => "node",
+          "nodeScheduling" => "not_ready"
         }
       end)
 
-    needs_unsched? = Enum.any?(vm_vertices, &is_nil(&1["host"]))
+    needs_unsched? = Enum.any?(vm_vertices, &is_nil(&1["nodeName"]))
 
     unsched_vertex =
       if needs_unsched? do
         [
           %{
-            "id" => "host:__unscheduled__",
+            "id" => "node:__unscheduled__",
             "label" => "Unscheduled",
-            "group" => "host",
-            "hostStatus" => "unscheduled"
+            "group" => "node",
+            "nodeScheduling" => "unscheduled"
           }
         ]
       else
         []
       end
 
-    host_by_id =
-      (host_vertices ++ orphan_host_vertices ++ unsched_vertex)
+    node_by_id =
+      (node_vertices ++ orphan_node_vertices ++ unsched_vertex)
       |> Enum.map(&{&1["id"], &1})
       |> Map.new()
 
-    graph_nodes = Map.values(host_by_id)
+    graph_nodes = Map.values(node_by_id)
 
     edges =
       Enum.map(vm_vertices, fn v ->
-        hid =
-          case v["host"] do
-            nil -> "host:__unscheduled__"
-            name -> "host:" <> name
+        nid =
+          case v["nodeName"] do
+            nil -> "node:__unscheduled__"
+            name -> "node:" <> name
           end
 
-        %{"from" => hid, "to" => v["id"]}
+        %{"from" => nid, "to" => v["id"]}
       end)
 
-    vm_nodes_only = Enum.map(vm_vertices, &Map.delete(&1, "host"))
+    vm_nodes_only = Enum.map(vm_vertices, &Map.delete(&1, "nodeName"))
 
     {running, stopped, other} = summary_counts_from_vm_statuses(vm_vertices)
 

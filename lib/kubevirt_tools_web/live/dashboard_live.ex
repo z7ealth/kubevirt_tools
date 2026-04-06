@@ -5,6 +5,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   alias KubevirtTools.ClusterExportLists
   alias KubevirtTools.ClusterInventory
+  alias KubevirtTools.ClusterVersion
   alias KubevirtTools.K8sSafeError
   alias KubevirtTools.ClusterMetrics
   alias KubevirtTools.DashboardCharts
@@ -53,7 +54,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
         "networks" -> :networks
         "disks" -> :disks
         "storage_classes" -> :storage_classes
-        "hosts" -> :hosts
+        "nodes" -> :nodes
         "vm_topology" -> :vm_topology
         _ -> socket.assigns.active_tab
       end
@@ -131,7 +132,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                   rel="noopener noreferrer"
                   class="btn btn-ghost btn-xs gap-1"
                   id="dashboard-export-xlsx"
-                  title="Download VirtualMachines as Excel (vmInfo sheet)"
+                  title="Download cluster inventory as Excel (VirtualMachines sheet matches CSV)"
                 >
                   XLSX
                 </.link>
@@ -207,7 +208,11 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     <.stat_tile label="Total VMs" value={m.total_vms} highlight={:neutral} />
                     <.stat_tile label="Running" value={m.running} highlight={:success} />
                     <.stat_tile label="Stopped" value={m.stopped} highlight={:danger} />
-                    <.stat_tile label="vCPUs (VMIs)" value={m.total_vcpus} highlight={:neutral} />
+                    <.stat_tile
+                      label="Guest CPUs (VMIs)"
+                      value={m.total_guest_cpu_cores}
+                      highlight={:neutral}
+                    />
                     <.stat_tile
                       label="Nodes ready"
                       value={"#{m.nodes_ready}/#{m.nodes_total}"}
@@ -217,7 +222,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     <.stat_tile label="Running VMIs" value={m.vmi_running} highlight={:success} />
                   </div>
 
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 max-w-2xl">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3 max-w-6xl">
                     <.usage_cluster_card
                       id="dashboard-usage-cpu"
                       label="Cluster CPU usage"
@@ -233,6 +238,18 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       value={m.usage_mem_value}
                       sub={m.usage_mem_sub}
                       highlight={m.usage_mem_highlight}
+                    />
+                    <.dashboard_version_card
+                      id="dashboard-version-kubernetes"
+                      label="Kubernetes version"
+                      value={data.kubernetes_version}
+                      hint={version_card_hint(data.kubernetes_version_error)}
+                    />
+                    <.dashboard_version_card
+                      id="dashboard-version-kubevirt"
+                      label="KubeVirt version"
+                      value={data.kubevirt_version}
+                      hint={version_card_hint(data.kubevirt_version_error)}
                     />
                   </div>
 
@@ -253,14 +270,14 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     />
                     <.apex_chart
                       class="min-w-0 max-h-[min(85vh,720px)] overflow-y-auto"
-                      id={"chart-vcpu-node-#{snap}"}
-                      title="vCPU per node (VMIs)"
+                      id={"chart-guest-cpu-node-#{snap}"}
+                      title="Guest CPUs per node (VMIs)"
                       height={"#{m.node_resource_chart_height_px}px"}
                       opts={
                         DashboardCharts.horizontal_bar(
-                          "vCPUs",
+                          "Guest CPUs",
                           m.node_labels,
-                          m.node_vcpu_counts,
+                          m.node_guest_cpu_totals,
                           "var(--color-primary)"
                         )
                       }
@@ -390,7 +407,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                   <% end %>
                   <%= if data.vm_error == nil do %>
                     <div class="mt-1">
-                      <.vm_table
+                      <.virtual_machines_table
                         items={data.vms}
                         vmis={if(data.vmi_error, do: [], else: data.vmis)}
                         pvcs={List.wrap(data.pvcs)}
@@ -410,7 +427,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                           tip="Usually short-lived (for example during delete); same columns as the main instance view."
                         />
                       </h3>
-                      <.orphan_vmi_table items={orphans} id_prefix="orphan-vmi" />
+                      <.orphan_virtual_machine_instance_table items={orphans} id_prefix="orphan-vmi" />
                     </div>
                   <% end %>
                 </section>
@@ -441,7 +458,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     </div>
                   <% end %>
                   <%= if data.vm_error == nil do %>
-                    <.vm_network_interfaces_table
+                    <.virtual_machine_network_interfaces_table
                       vms={data.vms}
                       vmis={if(data.vmi_error, do: [], else: data.vmis)}
                       id_prefix="vm-net"
@@ -476,7 +493,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     </div>
                   <% end %>
                   <%= if data.vm_error == nil do %>
-                    <.vm_disks_detail_table
+                    <.virtual_machine_disks_detail_table
                       vms={data.vms}
                       pvcs={List.wrap(data.pvcs)}
                       id_prefix="vm-disk"
@@ -521,16 +538,16 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
               <.tab_panel
                 root_id="kubevirt-dashboard-tabs"
-                tab={:hosts}
+                tab={:nodes}
                 active={@active_tab}
                 class="space-y-6 scroll-mt-24 pt-1"
               >
-                <section id="cluster-hosts" class="space-y-3">
+                <section id="cluster-nodes" class="space-y-3">
                   <div>
                     <h2 class="text-lg font-medium flex items-center gap-2">
-                      <.icon name="hero-server-stack" class="size-5 text-primary" /> Hosts (nodes)
+                      <.icon name="hero-server-stack" class="size-5 text-primary" /> Nodes
                       <.tab_heading_hint
-                        id="dashboard-tab-hosts-hint"
+                        id="dashboard-tab-nodes-hint"
                         tip="Kubernetes Nodes from the cluster API (status.addresses, allocatable resources, conditions). CPU and memory % prefer metrics-server NodeMetrics; when that API is missing, values are taken from Prometheus node_exporter (same queries as the dashboard) when scrape targets match the node name, hostname, or internal IP. VMIs counts use VMI status.nodeName."
                       />
                     </h2>
@@ -552,12 +569,12 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     </div>
                   <% end %>
                   <%= if data.node_error == nil do %>
-                    <.hosts_nodes_table
+                    <.nodes_table
                       nodes={List.wrap(data.nodes)}
                       vmis={if(data.vmi_error, do: [], else: data.vmis)}
                       node_metrics={List.wrap(data.node_metrics)}
                       prometheus_node_detail={m.prometheus_node_detail}
-                      id_prefix="host"
+                      id_prefix="node"
                     />
                   <% end %>
                 </section>
@@ -602,7 +619,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                           </li>
                           <li class="flex items-center gap-2">
                             <span class="size-3 rounded-sm bg-stopped-dim border border-stopped shrink-0 shadow-sm" />
-                            Node not ready, unknown host, or Unscheduled
+                            Node not ready, unknown node, or Unscheduled
                           </li>
                           <li class="flex items-center gap-2">
                             <span class="size-3 rounded-full bg-success/85 border border-success shrink-0 shadow-sm" />
@@ -889,6 +906,31 @@ defmodule KubevirtToolsWeb.DashboardLive do
   end
 
   attr :id, :string, required: true
+  attr :label, :string, required: true
+  attr :value, :string, required: true
+  attr :hint, :string, default: nil
+
+  defp dashboard_version_card(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class={[
+        "rounded-xl border border-base-300/60 bg-base-200/40 px-4 py-3 min-w-0 w-full",
+        "transition hover:border-primary/30 hover:bg-base-200/70"
+      ]}
+    >
+      <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">
+        {@label}
+      </p>
+      <p class="text-xl font-semibold tabular-nums mt-1 text-base-content break-words leading-snug">
+        {@value}
+      </p>
+      <p :if={@hint} class="text-xs text-base-content/55 mt-1.5 leading-snug">{@hint}</p>
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
 
   defp node_load_chart_placeholder(assigns) do
     ~H"""
@@ -958,7 +1000,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :empty_label, :string, required: true
   attr :id_prefix, :string, required: true
 
-  defp vm_table(assigns) do
+  defp virtual_machines_table(assigns) do
     assigns =
       assigns
       |> assign(:vmi_lookup, vmi_index_by_ns_name(List.wrap(assigns.vmis)))
@@ -975,7 +1017,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
             <th title="template.spec.domain.firmware.bootloader">Boot mode</th>
             <th>Cores</th>
             <th>Sockets</th>
-            <th>vCPUs</th>
+            <th>CPUs (guest)</th>
             <th>Memory</th>
             <th>VMI phase</th>
             <th>Node</th>
@@ -990,7 +1032,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
           </tr>
           <%= for {item, i} <- Enum.with_index(@items) do %>
             <% vmi = vmi_lookup_match(@vmi_lookup, item) %>
-            <% {cores, sockets, vcpus} = vm_cpu_topology_cells(item, vmi) %>
+            <% {cores, sockets, guest_cpu_total} = virtual_machine_cpu_topology_cells(item, vmi) %>
             <tr id={"#{@id_prefix}-row-#{i}"} class="hover:bg-base-200/40 transition-colors">
               <td class="font-mono text-xs whitespace-nowrap">{vm_meta(item, :namespace)}</td>
               <td class="font-medium whitespace-nowrap">{vm_meta(item, :name)}</td>
@@ -1005,7 +1047,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 {sockets}
               </td>
               <td class="text-xs tabular-nums font-medium" title="sockets × cores × threads">
-                {vcpus}
+                {guest_cpu_total}
               </td>
               <td class="text-xs font-mono text-base-content/75">{memory_for_vm_row(item, vmi)}</td>
               <td>
@@ -1014,9 +1056,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
               </td>
               <td
                 class="font-mono text-xs text-base-content/70 max-w-[10rem] truncate"
-                title={vmi_node(vmi || %{})}
+                title={vmi_scheduling_node_name(vmi || %{})}
               >
-                {if(vmi, do: vmi_node(vmi), else: "—")}
+                {if(vmi, do: vmi_scheduling_node_name(vmi), else: "—")}
               </td>
               <td
                 class="font-mono text-xs text-base-content/80 max-w-[9rem] truncate"
@@ -1044,7 +1086,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :items, :list, required: true
   attr :id_prefix, :string, required: true
 
-  defp orphan_vmi_table(assigns) do
+  defp orphan_virtual_machine_instance_table(assigns) do
     ~H"""
     <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
       <table class="table table-sm">
@@ -1054,7 +1096,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
             <th>Name</th>
             <th>Phase</th>
             <th>Node</th>
-            <th>vCPU</th>
+            <th>CPU (guest)</th>
             <th>Memory</th>
             <th>IP</th>
             <th>Ready</th>
@@ -1071,9 +1113,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
               </td>
               <td
                 class="font-mono text-xs text-base-content/70 max-w-[10rem] truncate"
-                title={vmi_node(item)}
+                title={vmi_scheduling_node_name(item)}
               >
-                {vmi_node(item)}
+                {vmi_scheduling_node_name(item)}
               </td>
               <td class="text-xs tabular-nums">{vmi_spec_cpu_cores(item)}</td>
               <td class="text-xs font-mono text-base-content/75">{vmi_spec_memory_guest(item)}</td>
@@ -1099,8 +1141,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :vmis, :list, default: []
   attr :id_prefix, :string, required: true
 
-  defp vm_network_interfaces_table(assigns) do
-    rows = vm_network_table_rows(assigns.vms, List.wrap(assigns.vmis))
+  defp virtual_machine_network_interfaces_table(assigns) do
+    rows = virtual_machine_network_interface_rows(assigns.vms, List.wrap(assigns.vmis))
     assigns = assign(assigns, :rows, rows)
 
     ~H"""
@@ -1157,8 +1199,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :pvcs, :list, default: []
   attr :id_prefix, :string, required: true
 
-  defp vm_disks_detail_table(assigns) do
-    rows = vm_disk_detail_rows(assigns.vms, List.wrap(assigns.pvcs))
+  defp virtual_machine_disks_detail_table(assigns) do
+    rows = virtual_machine_disk_detail_rows(assigns.vms, List.wrap(assigns.pvcs))
     assigns = assign(assigns, :rows, rows)
 
     ~H"""
@@ -1340,15 +1382,15 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :prometheus_node_detail, :map, default: %{}
   attr :id_prefix, :string, required: true
 
-  defp hosts_nodes_table(assigns) do
+  defp nodes_table(assigns) do
     merged =
-      hosts_merged_usage_map(
+      nodes_merged_usage_map(
         assigns.nodes,
         assigns.node_metrics,
         assigns.prometheus_node_detail || %{}
       )
 
-    rows = hosts_table_rows(assigns.nodes, assigns.vmis, merged)
+    rows = kubernetes_nodes_table_rows(assigns.nodes, assigns.vmis, merged)
     assigns = assign(assigns, :rows, rows)
 
     ~H"""
@@ -1447,7 +1489,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       %{id: :networks, label: "Networks"},
       %{id: :disks, label: "Disks"},
       %{id: :storage_classes, label: "Storage classes"},
-      %{id: :hosts, label: "Hosts"},
+      %{id: :nodes, label: "Nodes"},
       %{id: :vm_topology, label: "Topology"}
     ]
   end
@@ -1461,6 +1503,12 @@ defmodule KubevirtToolsWeb.DashboardLive do
       {pvcs, pvc_err} = safe_list(&ClusterInventory.list_pvcs/1, conn)
       {storage_classes, sc_err} = safe_list(&ClusterExportLists.list_storage_classes/1, conn)
       {node_metrics, metrics_err} = safe_list(&ClusterMetrics.list_node_metrics/1, conn)
+
+      {kubernetes_version, kubernetes_version_error} =
+        cluster_version_result(&ClusterVersion.kubernetes_git_version/1, conn)
+
+      {kubevirt_version, kubevirt_version_error} =
+        cluster_version_result(&ClusterVersion.kubevirt_release_version/1, conn)
 
       prometheus = prometheus_bootstrap_from_server_or_client()
 
@@ -1482,6 +1530,10 @@ defmodule KubevirtToolsWeb.DashboardLive do
            node_error: node_err,
            pvc_error: pvc_err,
            storage_class_error: sc_err,
+           kubernetes_version: kubernetes_version,
+           kubernetes_version_error: kubernetes_version_error,
+           kubevirt_version: kubevirt_version,
+           kubevirt_version_error: kubevirt_version_error,
            snapshot_at: System.system_time(:millisecond)
          }
        }}
@@ -1499,6 +1551,20 @@ defmodule KubevirtToolsWeb.DashboardLive do
       {:ok, items} -> {items, nil}
       {:error, reason} -> {[], reason}
     end
+  end
+
+  defp cluster_version_result(fun, conn) when is_function(fun, 1) do
+    case fun.(conn) do
+      {:ok, v} when is_binary(v) -> {v, nil}
+      {:ok, v} -> {to_string(v), nil}
+      {:error, reason} -> {"—", reason}
+    end
+  end
+
+  defp version_card_hint(nil), do: nil
+
+  defp version_card_hint(reason) do
+    K8sSafeError.user_facing(reason)
   end
 
   defp prometheus_bootstrap_from_server_or_client do
@@ -1543,7 +1609,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     {running, stopped, other} = vm_status_counts(vms)
     {vmi_run, vmi_not_run, vmi_other} = vmi_phase_counts(vmis)
 
-    {labels, counts, vcpus, mems} = node_resource_rows(nodes, vmis)
+    {labels, counts, guest_cpu_totals, mems} = node_resource_rows(nodes, vmis)
 
     node_resource_chart_height_px =
       DashboardCharts.node_horizontal_chart_height_px(length(labels))
@@ -1612,7 +1678,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       running: running,
       stopped: stopped,
       other_vm: other,
-      total_vcpus: Enum.sum(Map.values(vcpu_by_vmi(vmis))),
+      total_guest_cpu_cores: Enum.sum(Map.values(guest_cpu_cores_by_vmi_name(vmis))),
       nodes_ready: nodes_ready,
       nodes_schedulable: nodes_schedulable,
       nodes_cordoned: nodes_cordoned,
@@ -1621,7 +1687,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       pvc_total: length(pvcs),
       node_labels: labels,
       node_vm_counts: counts,
-      node_vcpu_counts: vcpus,
+      node_guest_cpu_totals: guest_cpu_totals,
       node_mem_mib: mems,
       node_resource_chart_height_px: node_resource_chart_height_px,
       pvc_bound: pvc_bound,
@@ -1710,15 +1776,15 @@ defmodule KubevirtToolsWeb.DashboardLive do
     end)
   end
 
-  defp vcpu_by_vmi(vmis) do
+  defp guest_cpu_cores_by_vmi_name(vmis) do
     for vmi <- vmis, into: %{} do
       name = vm_meta(vmi, :name)
-      cores = vmi_vcpu_cores(vmi)
+      cores = vmi_guest_cpu_core_count(vmi)
       {name, cores}
     end
   end
 
-  defp vmi_vcpu_cores(vmi) do
+  defp vmi_guest_cpu_core_count(vmi) do
     case get_in(vmi, ["spec", "domain", "cpu", "cores"]) do
       n when is_integer(n) and n > 0 -> n
       _ -> 1
@@ -1728,7 +1794,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   defp node_resource_rows(nodes, vmis) do
     grouped =
       Enum.group_by(vmis, fn vmi ->
-        n = vmi_node(vmi)
+        n = vmi_scheduling_node_name(vmi)
         if n in [nil, "", "—"], do: "Unscheduled", else: n
       end)
 
@@ -1762,9 +1828,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
       true ->
         counts = Enum.map(labels, fn l -> length(Map.get(grouped, l, [])) end)
 
-        vcpus =
+        guest_cpu_totals =
           Enum.map(labels, fn l ->
-            grouped |> Map.get(l, []) |> Enum.map(&vmi_vcpu_cores/1) |> Enum.sum()
+            grouped |> Map.get(l, []) |> Enum.map(&vmi_guest_cpu_core_count/1) |> Enum.sum()
           end)
 
         mems =
@@ -1772,7 +1838,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
             grouped |> Map.get(l, []) |> Enum.map(&vmi_memory_mib/1) |> Enum.sum()
           end)
 
-        {labels, counts, vcpus, mems}
+        {labels, counts, guest_cpu_totals, mems}
     end
   end
 
@@ -1781,9 +1847,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
     counts = Enum.map(labels, fn l -> length(Map.get(grouped, l, [])) end)
 
-    vcpus =
+    guest_cpu_totals =
       Enum.map(labels, fn l ->
-        grouped |> Map.get(l, []) |> Enum.map(&vmi_vcpu_cores/1) |> Enum.sum()
+        grouped |> Map.get(l, []) |> Enum.map(&vmi_guest_cpu_core_count/1) |> Enum.sum()
       end)
 
     mems =
@@ -1791,7 +1857,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
         grouped |> Map.get(l, []) |> Enum.map(&vmi_memory_mib/1) |> Enum.sum()
       end)
 
-    {labels, counts, vcpus, mems}
+    {labels, counts, guest_cpu_totals, mems}
   end
 
   defp vmi_memory_mib(vmi) do
@@ -2062,7 +2128,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     get_in(item, ["status", "phase"]) || "—"
   end
 
-  defp vmi_node(item) do
+  defp vmi_scheduling_node_name(item) do
     get_in(item, ["status", "nodeName"]) || "—"
   end
 
@@ -2091,13 +2157,13 @@ defmodule KubevirtToolsWeb.DashboardLive do
     end)
   end
 
-  defp vm_cpu_topology_cells(vm, vmi) do
+  defp virtual_machine_cpu_topology_cells(vm, vmi) do
     vm
-    |> vm_cpu_domain_for_row(vmi)
+    |> virtual_machine_cpu_domain_for_row(vmi)
     |> format_domain_cpu_topology()
   end
 
-  defp vm_cpu_domain_for_row(vm, vmi) do
+  defp virtual_machine_cpu_domain_for_row(vm, vmi) do
     vmi_cpu = vmi && get_in(vmi, ["spec", "domain", "cpu"])
     vm_cpu = get_in(vm, ["spec", "template", "spec", "domain", "cpu"])
 
@@ -2130,12 +2196,12 @@ defmodule KubevirtToolsWeb.DashboardLive do
     s_eff = socks_n || 1
     c_eff = cores_n || 1
     t_eff = thr_n || 1
-    total = s_eff * c_eff * t_eff
+    guest_cpu_total = s_eff * c_eff * t_eff
 
     {
       Integer.to_string(c_eff),
       Integer.to_string(s_eff),
-      Integer.to_string(total)
+      Integer.to_string(guest_cpu_total)
     }
   end
 
@@ -2419,7 +2485,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   defp k8s_storage_suffix_to_gib_multiplier("t"), do: 1024.0
   defp k8s_storage_suffix_to_gib_multiplier(_), do: 0.0
 
-  defp vm_network_table_rows(vms, vmis) when is_list(vms) do
+  defp virtual_machine_network_interface_rows(vms, vmis) when is_list(vms) do
     lookup = vmi_index_by_ns_name(vmis)
 
     Enum.flat_map(vms, fn vm ->
@@ -2495,7 +2561,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   defp format_iface_ips_display(_), do: "—"
 
-  defp vm_disk_detail_rows(vms, pvcs) when is_list(vms) do
+  defp virtual_machine_disk_detail_rows(vms, pvcs) when is_list(vms) do
     pvc_by_ns_claim = pvc_requests_by_namespace_claim(pvcs)
     pvc_info = pvc_extended_info_by_ns_claim(pvcs)
 
@@ -2688,9 +2754,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   defp format_disk_size_display(_), do: "—"
 
-  defp hosts_merged_usage_map(nodes, node_metrics, prometheus_node_detail) do
+  defp nodes_merged_usage_map(nodes, node_metrics, prometheus_node_detail) do
     ms = ClusterMetrics.per_node_usage_pct(List.wrap(nodes), List.wrap(node_metrics))
-    prom = prometheus_per_node_usage_for_hosts(List.wrap(nodes), prometheus_node_detail)
+    prom = prometheus_exporter_pct_by_node(List.wrap(nodes), prometheus_node_detail)
 
     Enum.reduce(List.wrap(nodes), %{}, fn n, acc ->
       name = get_in(n, ["metadata", "name"]) || ""
@@ -2698,36 +2764,36 @@ defmodule KubevirtToolsWeb.DashboardLive do
       if name == "" do
         acc
       else
-        Map.put(acc, name, merge_host_usage(Map.get(ms, name), Map.get(prom, name)))
+        Map.put(acc, name, merge_node_usage(Map.get(ms, name), Map.get(prom, name)))
       end
     end)
   end
 
-  defp merge_host_usage(ms_row, prom_row) do
+  defp merge_node_usage(ms_row, prom_row) do
     ms_row = ms_row || %{cpu: "—", mem: "—"}
     prom_row = prom_row || %{cpu: "—", mem: "—"}
 
     %{
-      cpu: first_host_usage_value(ms_row[:cpu], prom_row[:cpu]),
-      mem: first_host_usage_value(ms_row[:mem], prom_row[:mem])
+      cpu: coalesce_node_usage_pct(ms_row[:cpu], prom_row[:cpu]),
+      mem: coalesce_node_usage_pct(ms_row[:mem], prom_row[:mem])
     }
   end
 
-  defp first_host_usage_value("—", b), do: normalize_host_usage_pct(b)
-  defp first_host_usage_value(nil, b), do: normalize_host_usage_pct(b)
-  defp first_host_usage_value("", b), do: normalize_host_usage_pct(b)
-  defp first_host_usage_value(a, _), do: a
+  defp coalesce_node_usage_pct("—", b), do: normalize_usage_pct_display(b)
+  defp coalesce_node_usage_pct(nil, b), do: normalize_usage_pct_display(b)
+  defp coalesce_node_usage_pct("", b), do: normalize_usage_pct_display(b)
+  defp coalesce_node_usage_pct(a, _), do: a
 
-  defp normalize_host_usage_pct(nil), do: "—"
-  defp normalize_host_usage_pct("—"), do: "—"
-  defp normalize_host_usage_pct(s) when is_binary(s), do: s
+  defp normalize_usage_pct_display(nil), do: "—"
+  defp normalize_usage_pct_display("—"), do: "—"
+  defp normalize_usage_pct_display(s) when is_binary(s), do: s
 
-  defp prometheus_per_node_usage_for_hosts(_nodes, detail)
+  defp prometheus_exporter_pct_by_node(_nodes, detail)
        when detail == nil or detail == %{} do
     %{}
   end
 
-  defp prometheus_per_node_usage_for_hosts(nodes, detail) when is_map(detail) do
+  defp prometheus_exporter_pct_by_node(nodes, detail) when is_map(detail) do
     cpu_list = prometheus_instance_series(detail, :cpu_by_instance)
     mem_list = prometheus_instance_series(detail, :mem_by_instance)
     cpu_by = prometheus_label_to_pct_map(cpu_list)
@@ -2742,8 +2808,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
         labels = node_prometheus_match_labels(n)
 
         Map.put(acc, name, %{
-          cpu: first_prometheus_host_pct(cpu_by, labels),
-          mem: first_prometheus_host_pct(mem_by, labels)
+          cpu: first_exporter_label_match(cpu_by, labels),
+          mem: first_exporter_label_match(mem_by, labels)
         })
       end
     end)
@@ -2758,7 +2824,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       {l, v} = prometheus_entry_label_value(e)
 
       if is_binary(l) and l != "" and is_float(v) do
-        Map.put(acc, l, format_host_prometheus_pct(v))
+        Map.put(acc, l, format_exporter_pct_display(v))
       else
         acc
       end
@@ -2772,11 +2838,11 @@ defmodule KubevirtToolsWeb.DashboardLive do
     {l, v}
   end
 
-  defp format_host_prometheus_pct(f) when is_float(f) do
+  defp format_exporter_pct_display(f) when is_float(f) do
     "#{min(100, max(0, round(f)))}%"
   end
 
-  defp first_prometheus_host_pct(by_label, candidates) do
+  defp first_exporter_label_match(by_label, candidates) do
     Enum.find_value(candidates, fn c -> Map.get(by_label, c) end) || "—"
   end
 
@@ -2791,32 +2857,32 @@ defmodule KubevirtToolsWeb.DashboardLive do
           String.trim(a) != "",
           do: String.trim(a)
 
-    hosts =
+    dns_hostnames =
       for %{"type" => "Hostname", "address" => a} <- addrs,
           is_binary(a),
           String.trim(a) != "",
           do: String.trim(a)
 
-    short_hosts =
-      Enum.flat_map(hosts, fn h ->
+    hostname_match_variants =
+      Enum.flat_map(dns_hostnames, fn h ->
         case String.split(h, ".", parts: 2) do
           [short, _] when short != "" -> [h, short]
           _ -> [h]
         end
       end)
 
-    [name | ips ++ short_hosts]
+    [name | ips ++ hostname_match_variants]
     |> Enum.uniq()
     |> Enum.reject(&(&1 == ""))
   end
 
-  defp hosts_table_rows(nodes, vmis, merged_usage) do
-    n_list = nodes |> List.wrap() |> Enum.sort_by(&host_node_sort_name/1, :asc)
+  defp kubernetes_nodes_table_rows(nodes, vmis, merged_usage) do
+    n_list = nodes |> List.wrap() |> Enum.sort_by(&kubernetes_node_sort_key/1, :asc)
     vmi_counts = vmi_count_by_k8s_node(vmis)
-    Enum.map(n_list, &hosts_row_from_node(&1, vmi_counts, merged_usage))
+    Enum.map(n_list, &kubernetes_node_table_row(&1, vmi_counts, merged_usage))
   end
 
-  defp host_node_sort_name(n), do: get_in(n, ["metadata", "name"]) || ""
+  defp kubernetes_node_sort_key(n), do: get_in(n, ["metadata", "name"]) || ""
 
   defp vmi_count_by_k8s_node(vmis) do
     Enum.reduce(List.wrap(vmis), %{}, fn vmi, acc ->
@@ -2827,7 +2893,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     end)
   end
 
-  defp hosts_row_from_node(node, vmi_counts, usage_map) do
+  defp kubernetes_node_table_row(node, vmi_counts, usage_map) do
     name = get_in(node, ["metadata", "name"]) || "—"
     ni = get_in(node, ["status", "nodeInfo"]) || %{}
     ready = node_ready?(node)
@@ -2856,9 +2922,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
     %{
       name: name,
       is_ready: ready,
-      scheduling: host_scheduling_state(node),
-      scheduling_hint: host_scheduling_hint(node),
-      role: host_role_label(node),
+      scheduling: kubernetes_node_scheduling_label(node),
+      scheduling_hint: kubernetes_node_not_ready_hint(node),
+      role: kubernetes_node_role_label(node),
       vmi_count: Map.get(vmi_counts, name, 0),
       cpu_pct: pct[:cpu] || "—",
       mem_pct: pct[:mem] || "—",
@@ -2873,7 +2939,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     }
   end
 
-  defp host_scheduling_state(node) do
+  defp kubernetes_node_scheduling_label(node) do
     cond do
       not node_ready?(node) -> "Not ready"
       node_cordoned?(node) -> "Cordoned"
@@ -2881,7 +2947,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     end
   end
 
-  defp host_scheduling_hint(node) do
+  defp kubernetes_node_not_ready_hint(node) do
     if node_ready?(node) do
       nil
     else
@@ -2901,7 +2967,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     end
   end
 
-  defp host_role_label(node) do
+  defp kubernetes_node_role_label(node) do
     labels = get_in(node, ["metadata", "labels"]) || %{}
 
     cond do

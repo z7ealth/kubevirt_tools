@@ -145,7 +145,7 @@ defmodule KubevirtTools.DashboardCharts do
 
   @doc """
   Donut for Kubernetes nodes: schedulable (Ready, not cordoned), cordoned (Ready + unschedulable),
-  not ready — similar to vSphere hosts connected vs maintenance vs failed.
+  and not ready (other phases or NotReady condition).
   """
   def node_scheduling_donut(schedulable, cordoned, not_ready)
       when is_integer(schedulable) and is_integer(cordoned) and is_integer(not_ready) do

@@ -24,7 +24,7 @@ defmodule KubevirtToolsWeb.ExportController do
 
       {:error, _} ->
         conn
-        |> put_flash(:error, "Could not export VirtualMachines. Try refreshing the dashboard.")
+        |> put_flash(:error, "Could not export cluster inventory. Try refreshing the dashboard.")
         |> redirect(to: ~p"/dashboard")
     end
   end
@@ -54,7 +54,7 @@ defmodule KubevirtToolsWeb.ExportController do
 
       {:error, _} ->
         conn
-        |> put_flash(:error, "Could not export VirtualMachines. Try refreshing the dashboard.")
+        |> put_flash(:error, "Could not export cluster inventory. Try refreshing the dashboard.")
         |> redirect(to: ~p"/dashboard")
     end
   end

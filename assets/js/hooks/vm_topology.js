@@ -32,7 +32,7 @@ function readTopologyTheme(el) {
     edgeHover: v("--topology-edge-hover-accent", "#0d5c56"),
     hoverLabel: v("--topology-hover-label", "#0a4a45"),
     nodeLabel: v("--topology-node-label", "#e2e8f0"),
-    hostReady: pair(
+    nodeSchedulable: pair(
       v("--topology-hr-bg", "#1e3a5f"),
       v("--topology-hr-border", "#3b82f6"),
       v("--topology-hr-hi-bg", "#2563eb"),
@@ -40,7 +40,7 @@ function readTopologyTheme(el) {
       hoverBg,
       hoverBorder
     ),
-    hostCordoned: pair(
+    nodeCordoned: pair(
       v("--topology-hc-bg", "#5c2e0a"),
       v("--topology-hc-border", "#ea580c"),
       v("--topology-hc-hi-bg", "#c2410c"),
@@ -48,7 +48,7 @@ function readTopologyTheme(el) {
       hoverBg,
       hoverBorder
     ),
-    hostDown: pair(
+    nodeNotReady: pair(
       v("--topology-hd-bg", "#4a2528"),
       v("--topology-hd-border", "#b85858"),
       v("--topology-hd-hi-bg", "#6d383c"),
@@ -56,7 +56,7 @@ function readTopologyTheme(el) {
       hoverBg,
       hoverBorder
     ),
-    hostUnsched: pair(
+    nodeUnscheduled: pair(
       v("--topology-hu-bg", "#4a2528"),
       v("--topology-hu-border", "#b85858"),
       v("--topology-hu-hi-bg", "#6d383c"),
@@ -91,16 +91,17 @@ function readTopologyTheme(el) {
   }
 }
 
-function hostColors(hostStatus, t) {
-  switch (hostStatus) {
+/** Maps payload `nodeScheduling` (Kubernetes node readiness / cordon / unscheduled bucket) to vis colors. */
+function k8sNodeColors(nodeScheduling, t) {
+  switch (nodeScheduling) {
     case "ready":
-      return t.hostReady
+      return t.nodeSchedulable
     case "cordoned":
-      return t.hostCordoned
+      return t.nodeCordoned
     case "unscheduled":
-      return t.hostUnsched
+      return t.nodeUnscheduled
     default:
-      return t.hostDown
+      return t.nodeNotReady
   }
 }
 
@@ -116,8 +117,8 @@ function vmColors(vmStatus, t) {
 }
 
 function mapVisNode(n, t) {
-  if (n.group === "host") {
-    const c = hostColors(n.hostStatus || "not_ready", t)
+  if (n.group === "node") {
+    const c = k8sNodeColors(n.nodeScheduling || "not_ready", t)
     return {
       id: n.id,
       label: truncate(n.label, 24),

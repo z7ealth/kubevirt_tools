@@ -1,7 +1,7 @@
 defmodule KubevirtTools.VmExport do
   @moduledoc """
-  Multi-sheet cluster inventory XLSX export (Summary, vCluster, vInfo, vHost, …) plus CSV for the
-  **vInfo** sheet columns.
+  Multi-sheet cluster inventory XLSX export (Summary, Cluster, VirtualMachines, Nodes, …) plus CSV
+  matching the **VirtualMachines** sheet columns.
   """
 
   alias KubevirtTools.VmExport.Workbook
@@ -43,11 +43,11 @@ defmodule KubevirtTools.VmExport do
   def to_cell(val), do: to_string(val)
 
   @doc """
-  RFC 4180–style CSV (UTF-8) for the **vInfo** sheet columns.
+  RFC 4180–style CSV (UTF-8) for the **VirtualMachines** sheet columns.
   """
   @spec to_csv(map()) :: String.t()
   def to_csv(%{} = bundle) do
-    {headers, rows} = Workbook.v_info_rows(bundle)
+    {headers, rows} = Workbook.virtual_machine_inventory_rows(bundle)
 
     ([headers] ++ rows)
     |> Enum.map(fn line -> Enum.map_join(line, ",", &escape_csv/1) end)
@@ -61,9 +61,8 @@ defmodule KubevirtTools.VmExport do
   end
 
   @doc """
-  XLSX workbook with sheets: Summary, vCluster, vInfo, vHost, vMemory, vGuestAgent, Snapshots,
-  Health, vDisk, vNetwork, vCPU, vDatastore, vPVC, Quotas, Limits, vEvents, vMigration,
-  vDataVolume, vTemplate.
+  XLSX workbook built by `KubevirtTools.VmExport.Workbook.build_workbook/1` — one sheet per
+  `*_sheet/1` function (e.g. `summary_sheet`, `cluster_sheet`, `virtual_machines_sheet`, …).
   """
   @spec to_xlsx(map()) :: {:ok, binary()} | {:error, term()}
   def to_xlsx(%{} = bundle) do

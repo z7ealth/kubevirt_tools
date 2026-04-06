@@ -168,7 +168,7 @@
   }
 }
 
-/* VM topology (vis-network): colors track active Daisy theme via custom properties */
+/* Topology (vis-network): Node + VM colors track active Daisy theme via custom properties */
 [data-vm-topology-root] {
   --topology-canvas-bg: color-mix(in oklch, var(--color-base-200) 78%, var(--color-base-300));
   --topology-shadow: color-mix(in oklch, var(--color-base-content) 20%, transparent);
@@ -181,25 +181,25 @@
   --topology-hover-label: color-mix(in oklch, black 52%, var(--color-primary));
   --topology-edge-hover-accent: color-mix(in oklch, var(--color-primary) 40%, black);
 
-  /* Host: ready (primary) */
+  /* Kubernetes Node: Ready, schedulable (primary) */
   --topology-hr-bg: color-mix(in oklch, var(--color-primary) 42%, var(--color-base-300));
   --topology-hr-border: color-mix(in oklch, var(--color-primary) 78%, var(--color-base-100));
   --topology-hr-hi-bg: color-mix(in oklch, var(--color-primary) 58%, var(--color-base-200));
   --topology-hr-hi-border: var(--color-primary);
 
-  /* Host: cordoned (warning) */
+  /* Kubernetes Node: cordoned (warning) */
   --topology-hc-bg: color-mix(in oklch, var(--color-warning) 40%, var(--color-base-300));
   --topology-hc-border: color-mix(in oklch, var(--color-warning) 75%, var(--color-base-100));
   --topology-hc-hi-bg: color-mix(in oklch, var(--color-warning) 55%, var(--color-base-200));
   --topology-hc-hi-border: var(--color-warning);
 
-  /* Host: not ready / unknown (soft red, matches stopped chart) */
+  /* Kubernetes Node: NotReady / unknown name (soft red, matches stopped chart) */
   --topology-hd-bg: color-mix(in oklch, var(--color-stopped) 42%, var(--color-base-300));
   --topology-hd-border: color-mix(in oklch, var(--color-stopped) 72%, var(--color-base-100));
   --topology-hd-hi-bg: color-mix(in oklch, var(--color-stopped) 58%, var(--color-base-200));
   --topology-hd-hi-border: var(--color-stopped);
 
-  /* Host: Unscheduled pool — same tokens as “not ready / unknown” (legend error host) */
+  /* Unscheduled VMs bucket — same tokens as NotReady / unknown (legend) */
   --topology-hu-bg: var(--topology-hd-bg);
   --topology-hu-border: var(--topology-hd-border);
   --topology-hu-hi-bg: var(--topology-hd-hi-bg);

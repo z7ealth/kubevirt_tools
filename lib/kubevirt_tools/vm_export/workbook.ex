@@ -3,61 +3,61 @@ defmodule KubevirtTools.VmExport.Workbook do
 
   alias KubevirtTools.VmExport
 
-  @v_info_headers [
+  @virtual_machine_export_headers [
     "VM",
-    "Memory Limits",
+    "Memory limit",
     "Labels",
     "Annotations",
     "UID",
-    "Powerstate",
-    "Template",
-    "Folder",
-    "DNS Name",
+    "Printable status",
+    "Instancetype",
+    "Notes",
+    "DNS name",
     "Cores",
     "Sockets",
-    "Total vCPUs",
+    "Total CPUs (guest)",
     "Memory",
     "NICs",
     "Disks",
-    "Provisioned",
-    "Primary IP Address",
+    "Allocated",
+    "Primary IP",
     "Network #1",
-    "Host",
-    "OS (Config)",
-    "OS (Agent)",
+    "Node",
+    "OS (template)",
+    "OS (guest agent)",
     "Created",
     "Started",
     "Uptime",
-    "Run Strategy",
-    "Live Migratable",
-    "Eviction Strategy",
-    "Guest Agent",
-    "Agent Version",
-    "CPU Requests",
-    "CPU Limits",
-    "Memory Requests"
+    "Run strategy",
+    "Live migratable",
+    "Eviction strategy",
+    "Guest agent",
+    "Agent version",
+    "CPU request",
+    "CPU limit",
+    "Memory request"
   ]
 
   @sheet_order [
-    {"Summary", :summary},
-    {"vCluster", :v_cluster},
-    {"vInfo", :v_info},
-    {"vHost", :v_host},
-    {"vMemory", :v_memory},
-    {"vGuestAgent", :v_guest_agent},
-    {"Snapshots", :snapshots},
-    {"Health", :health},
-    {"vDisk", :v_disk},
-    {"vNetwork", :v_network},
-    {"vCPU", :v_cpu},
-    {"vDatastore", :v_datastore},
-    {"vPVC", :v_pvc},
-    {"Quotas", :quotas},
-    {"Limits", :limits},
-    {"vEvents", :v_events},
-    {"vMigration", :v_migration},
-    {"vDataVolume", :v_data_volume},
-    {"vTemplate", :v_template}
+    {"Summary", :summary_sheet},
+    {"Cluster", :cluster_sheet},
+    {"VirtualMachines", :virtual_machines_sheet},
+    {"Nodes", :nodes_sheet},
+    {"Memory", :memory_sheet},
+    {"GuestAgent", :guest_agent_sheet},
+    {"Snapshots", :snapshots_sheet},
+    {"VM conditions", :vm_conditions_sheet},
+    {"Disks", :disks_sheet},
+    {"Networks", :networks_sheet},
+    {"CPU", :cpu_sheet},
+    {"StorageClasses", :storage_classes_sheet},
+    {"PVCs", :pvcs_sheet},
+    {"ResourceQuotas", :resource_quotas_sheet},
+    {"LimitRanges", :limit_ranges_sheet},
+    {"Events", :events_sheet},
+    {"Migrations", :migrations_sheet},
+    {"DataVolumes", :data_volumes_sheet},
+    {"ClusterPreferences", :cluster_preferences_sheet}
   ]
 
   @spec build_workbook(map()) :: Elixlsx.Workbook.t()
@@ -68,8 +68,8 @@ defmodule KubevirtTools.VmExport.Workbook do
     end)
   end
 
-  @spec v_info_rows(map()) :: {list(String.t()), list(list(String.t()))}
-  def v_info_rows(bundle) do
+  @spec virtual_machine_inventory_rows(map()) :: {list(String.t()), list(list(String.t()))}
+  def virtual_machine_inventory_rows(bundle) do
     vms = Map.get(bundle, :vms, [])
     vmis = Map.get(bundle, :vmis, [])
     idx = vmi_index(vmis)
@@ -79,13 +79,13 @@ defmodule KubevirtTools.VmExport.Workbook do
         ns = meta(vm, "namespace")
         name = meta(vm, "name")
         vmi = Map.get(idx, {ns, name})
-        v_info_row(vm, vmi)
+        virtual_machine_inventory_row(vm, vmi)
       end)
 
-    {@v_info_headers, rows}
+    {@virtual_machine_export_headers, rows}
   end
 
-  def summary(bundle) do
+  def summary_sheet(bundle) do
     meta = Map.get(bundle, :meta, %{})
     nodes = Map.get(bundle, :nodes, [])
     vms = Map.get(bundle, :vms, [])
@@ -112,13 +112,13 @@ defmodule KubevirtTools.VmExport.Workbook do
       ["Total CPUs", "#{total_cpu} cores"],
       ["Total Memory", total_mem],
       ["", ""],
-      ["VIRTUAL MACHINES", ""],
-      ["Total VMs", to_string(length(vms))],
+      ["KUBEVIRT", ""],
+      ["Total VirtualMachines", to_string(length(vms))],
       ["Running VMIs", to_string(running_vmis)]
     ]
   end
 
-  def v_cluster(bundle) do
+  def cluster_sheet(bundle) do
     meta = Map.get(bundle, :meta, %{})
     nodes = Map.get(bundle, :nodes, [])
     {ready, _} = node_ready_counts(nodes)
@@ -145,35 +145,35 @@ defmodule KubevirtTools.VmExport.Workbook do
     ]
   end
 
-  def v_info(bundle) do
-    {h, r} = v_info_rows(bundle)
+  def virtual_machines_sheet(bundle) do
+    {h, r} = virtual_machine_inventory_rows(bundle)
     [h | r]
   end
 
-  def v_host(bundle) do
+  def nodes_sheet(bundle) do
     nodes = Map.get(bundle, :nodes, [])
     vmis = Map.get(bundle, :vmis, [])
     by_node = vmis_by_node(vmis)
 
     hdr = [
-      "Host",
+      "Node",
       "Status",
       "Roles",
       "CPUs",
-      "CPU Model",
+      "CPU model",
       "Allocatable CPU",
       "Memory",
-      "Allocatable Memory",
-      "VM Count",
-      "vCPUs Total",
-      "vRAM Total",
+      "Allocatable memory",
+      "VMI count",
+      "Guest CPUs total",
+      "Guest memory total",
       "OS",
       "Kernel",
-      "Kubelet Version",
-      "Container Runtime",
+      "Kubelet version",
+      "Container runtime",
       "Schedulable",
-      "CPU Overcommit",
-      "Memory Overcommit",
+      "CPU overcommit",
+      "Memory overcommit",
       "Boot Time",
       "Uptime",
       "Taints"
@@ -183,8 +183,8 @@ defmodule KubevirtTools.VmExport.Workbook do
       Enum.map(nodes, fn n ->
         name = meta(n, "name")
         vm_list = Map.get(by_node, name, [])
-        vcpus = Enum.sum(Enum.map(vm_list, &vmi_vcpu/1))
-        vram = Enum.sum(Enum.map(vm_list, &vmi_memory_bytes/1))
+        guest_cpus = Enum.sum(Enum.map(vm_list, &vmi_guest_cpu_count/1))
+        guest_mem = Enum.sum(Enum.map(vm_list, &vmi_memory_bytes/1))
 
         [
           name,
@@ -196,8 +196,8 @@ defmodule KubevirtTools.VmExport.Workbook do
           get_in(n, ["status", "capacity", "memory"]) || "—",
           get_in(n, ["status", "allocatable", "memory"]) || "—",
           to_string(length(vm_list)),
-          to_string(vcpus),
-          format_bytes(vram),
+          to_string(guest_cpus),
+          format_bytes(guest_mem),
           get_in(n, ["status", "nodeInfo", "osImage"]) || "—",
           get_in(n, ["status", "nodeInfo", "kernelVersion"]) || "—",
           get_in(n, ["status", "nodeInfo", "kubeletVersion"]) || "—",
@@ -214,7 +214,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def v_memory(bundle) do
+  def memory_sheet(bundle) do
     vms = Map.get(bundle, :vms, [])
     vmis = Map.get(bundle, :vmis, [])
     nodes = Map.get(bundle, :nodes, [])
@@ -226,14 +226,14 @@ defmodule KubevirtTools.VmExport.Workbook do
       "Namespace",
       "Status",
       "Memory",
-      "Memory (Bytes)",
-      "Requests",
-      "Limits",
+      "Memory (bytes)",
+      "Memory request",
+      "Memory limit",
       "Hugepages",
-      "Overcommit Guaranteed",
+      "Overcommit guaranteed",
       "Node",
-      "Node Memory",
-      "Node Alloc. Memory"
+      "Node memory",
+      "Node allocatable memory"
     ]
 
     rows =
@@ -264,7 +264,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def v_guest_agent(bundle) do
+  def guest_agent_sheet(bundle) do
     vms = Map.get(bundle, :vms, [])
     vmis = Map.get(bundle, :vmis, [])
     idx = vmi_index(vmis)
@@ -312,7 +312,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def snapshots(bundle) do
+  def snapshots_sheet(bundle) do
     snaps = Map.get(bundle, :vm_snapshots, [])
 
     hdr = [
@@ -349,10 +349,10 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def health(bundle) do
+  def vm_conditions_sheet(bundle) do
     vms = Map.get(bundle, :vms, [])
 
-    hdr = ["Name", "Namespace", "Message", "Severity", "Check Type"]
+    hdr = ["VM", "Namespace", "Message", "Status", "Type"]
 
     rows =
       Enum.flat_map(vms, fn vm ->
@@ -372,7 +372,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def v_disk(bundle) do
+  def disks_sheet(bundle) do
     vms = Map.get(bundle, :vms, [])
     vmis = Map.get(bundle, :vmis, [])
     idx = vmi_index(vmis)
@@ -433,7 +433,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def v_network(bundle) do
+  def networks_sheet(bundle) do
     vms = Map.get(bundle, :vms, [])
     vmis = Map.get(bundle, :vmis, [])
     idx = vmi_index(vmis)
@@ -484,7 +484,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def v_cpu(bundle) do
+  def cpu_sheet(bundle) do
     vms = Map.get(bundle, :vms, [])
     vmis = Map.get(bundle, :vmis, [])
     nodes = Map.get(bundle, :nodes, [])
@@ -496,14 +496,14 @@ defmodule KubevirtTools.VmExport.Workbook do
       "Namespace",
       "Status",
       "Sockets",
-      "Cores/Socket",
+      "Cores per socket",
       "Threads",
-      "Total vCPUs",
+      "Total CPUs (guest)",
       "Model",
-      "Dedicated",
+      "Dedicated CPU placement",
       "Node",
       "Node CPUs",
-      "Node CPU Model"
+      "Node CPU model"
     ]
 
     rows =
@@ -515,7 +515,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         sockets = Map.get(dom, "sockets")
         cores = Map.get(dom, "cores") || 1
         threads = Map.get(dom, "threads")
-        total = total_vcpu(dom, vmi)
+        total = domain_guest_cpu_total(dom, vmi)
         node = (vmi && get_in(vmi, ["status", "nodeName"])) || ""
         nn = node && Map.get(nmap, node)
 
@@ -538,7 +538,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def v_datastore(bundle) do
+  def storage_classes_sheet(bundle) do
     pvcs = Map.get(bundle, :pvcs, [])
     scs = Map.get(bundle, :storage_classes, [])
 
@@ -546,15 +546,15 @@ defmodule KubevirtTools.VmExport.Workbook do
       "Name",
       "Provisioner",
       "Default",
-      "Default Virt",
-      "Reclaim Policy",
-      "Binding Mode",
-      "Volume Expansion",
-      "PVC Count",
-      "Snapshot Count",
-      "PVC Allocated",
+      "Default (CDI)",
+      "Reclaim policy",
+      "Binding mode",
+      "Volume expansion",
+      "PVC count",
+      "Snapshot count",
+      "PVC allocated",
       "Used",
-      "Alloc. Free",
+      "Allocatable free",
       "Used %",
       "Description"
     ]
@@ -594,7 +594,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def v_pvc(bundle) do
+  def pvcs_sheet(bundle) do
     pvcs = Map.get(bundle, :pvcs, [])
     vm_by_pvc = vm_claiming_pvc_index(Map.get(bundle, :vms, []))
 
@@ -635,7 +635,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def quotas(bundle) do
+  def resource_quotas_sheet(bundle) do
     qs = Map.get(bundle, :resource_quotas, [])
 
     hdr = ["Name", "Namespace", "Resource", "Hard Limit", "Used", "Usage %", "Created"]
@@ -671,7 +671,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def limits(bundle) do
+  def limit_ranges_sheet(bundle) do
     lrs = Map.get(bundle, :limit_ranges, [])
 
     hdr = [
@@ -731,7 +731,7 @@ defmodule KubevirtTools.VmExport.Workbook do
   defp limit_cell(nil), do: ""
   defp limit_cell(v), do: to_string(v)
 
-  def v_events(bundle) do
+  def events_sheet(bundle) do
     evs =
       bundle
       |> Map.get(:events, [])
@@ -772,7 +772,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def v_migration(bundle) do
+  def migrations_sheet(bundle) do
     ms = Map.get(bundle, :vm_migrations, [])
 
     hdr = [
@@ -809,7 +809,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def v_data_volume(bundle) do
+  def data_volumes_sheet(bundle) do
     dvs = Map.get(bundle, :data_volumes, [])
 
     hdr = [
@@ -845,7 +845,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  def v_template(bundle) do
+  def cluster_preferences_sheet(bundle) do
     prefs = Map.get(bundle, :vm_preferences, [])
 
     hdr = [
@@ -878,14 +878,14 @@ defmodule KubevirtTools.VmExport.Workbook do
     [hdr | rows]
   end
 
-  # --- vInfo row ---
+  # --- VirtualMachines sheet row (CSV uses the same columns) ---
 
-  defp v_info_row(vm, vmi) do
+  defp virtual_machine_inventory_row(vm, vmi) do
     name = meta(vm, "name")
     dom = get_in(vm, ["spec", "template", "spec", "domain"]) || %{}
     ifaces = get_in(dom, ["devices", "interfaces"]) || []
     disks = get_in(dom, ["devices", "disks"]) || []
-    {cores_cell, sockets_cell, total_cell} = v_info_cpu_columns(vm, vmi, dom)
+    {cores_cell, sockets_cell, total_cell} = virtual_machine_cpu_columns(vm, vmi, dom)
 
     [
       name,
@@ -923,8 +923,8 @@ defmodule KubevirtTools.VmExport.Workbook do
     ]
   end
 
-  # KubeVirt: `cores` = per socket; total vCPU = sockets * cores * threads (default 1 for missing parts).
-  defp v_info_cpu_columns(_vm, vmi, dom) when is_map(dom) do
+  # KubeVirt: `cores` per socket; guest CPU count = sockets * cores * threads (default 1 for missing parts).
+  defp virtual_machine_cpu_columns(_vm, vmi, dom) when is_map(dom) do
     vm_cpu = Map.get(dom, "cpu") || %{}
     vmi_cpu = (vmi && get_in(vmi, ["spec", "domain", "cpu"])) || %{}
 
@@ -1252,9 +1252,9 @@ defmodule KubevirtTools.VmExport.Workbook do
     |> Map.delete("")
   end
 
-  defp vmi_vcpu(nil), do: 0
+  defp vmi_guest_cpu_count(nil), do: 0
 
-  defp vmi_vcpu(vmi) do
+  defp vmi_guest_cpu_count(vmi) do
     c = get_in(vmi, ["spec", "domain", "cpu", "cores"])
     if is_integer(c), do: c, else: 0
   end
@@ -1270,14 +1270,14 @@ defmodule KubevirtTools.VmExport.Workbook do
     if q == "", do: 0, else: quantity_to_bytes(q)
   end
 
-  defp total_vcpu(dom, vmi) when is_map(dom) do
+  defp domain_guest_cpu_total(dom, vmi) when is_map(dom) do
     sockets = Map.get(dom, "sockets") || 1
     cores = Map.get(dom, "cores") || 1
     threads = Map.get(dom, "threads") || 1
 
     case vmi do
       nil -> sockets * cores * threads
-      _ -> max(vmi_vcpu(vmi), sockets * cores * threads)
+      _ -> max(vmi_guest_cpu_count(vmi), sockets * cores * threads)
     end
   end
 
