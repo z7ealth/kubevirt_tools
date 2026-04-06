@@ -82,3 +82,11 @@ The following are **not** environment variables today; they live in `config/conf
 - [Phoenix Framework](https://www.phoenixframework.org/)
 - [Phoenix guides](https://hexdocs.pm/phoenix/overview.html)
 - [KubeVirt](https://kubevirt.io/)
+
+## Known issue: Logo
+
+The logo may appear low-quality or "questionable."
+
+This is a known feature.
+
+No fix is planned.
