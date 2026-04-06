@@ -34,7 +34,8 @@ KubeVirt Tools is not affiliated with those projects; it is an independent Phoen
 
 ## Requirements
 
-- Elixir / Erlang as in `mix.exs`
+- Elixir & Erlang installed.
+- `mix` command available in $PATH
 - A cluster reachable with the uploaded kubeconfig (KubeVirt CRDs where applicable)
 
 ## Quick start
