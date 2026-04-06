@@ -18,9 +18,9 @@ Phoenix web app for **cluster-wide KubeVirt and Kubernetes visibility**: sign in
 
 Ideas and goals here overlap with tools that help operators **see, export, and reason about** virtual infrastructure:
 
-- **[RVTools](https://www.robware.net/rvtools/)** — the well-known VMware vSphere inventory and reporting workflow (spreadsheet-friendly exports, environment-wide visibility).
-- **OVTools** — projects in the same spirit for **OpenShift Virtualization** / Kubernetes-native VMs: RVTools-style consolidated inventory and reporting across namespaces, rather than stitching together `kubectl` / YAML by hand.
-- **[KubeVirt Manager](https://kubevirt-manager.io/)** ([GitHub](https://github.com/kubevirt-manager/kubevirt-manager)) — a web UI focused on operating KubeVirt day to day (VMs, storage, monitoring, and related resources).
+- **[RVTools](https://www.dell.com/en-us/shop/vmware/sl/rvtools)** — the well-known VMware vSphere inventory and reporting workflow (spreadsheet-friendly exports, environment-wide visibility).
+- **[OVTools](https://github.com/linuxelitebr/ovtools-release)** (OpenShift Virtualization Tools) — RVTools-style consolidated inventory and reporting for **OpenShift Virtualization** / Kubernetes-native VMs across namespaces, rather than stitching together `kubectl` / YAML by hand.
+- **[KubeVirt Manager](https://github.com/kubevirt-manager/kubevirt-manager)** — a web UI focused on operating KubeVirt day to day (VMs, storage, monitoring, and related resources).
 
 KubeVirt Tools is not affiliated with those projects; it is an independent Phoenix app aimed at similar **cluster-wide clarity** on plain KubeVirt clusters.
 
