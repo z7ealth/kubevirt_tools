@@ -4,6 +4,7 @@ defmodule KubevirtToolsWeb.ExportController do
   alias KubevirtTools.ExportFilename
   alias KubevirtTools.K8sConn
   alias KubevirtTools.KubeconfigStore
+  alias KubevirtTools.SessionToken
   alias KubevirtTools.VmExport
   alias KubevirtTools.VmExport.Bundle
 
@@ -42,9 +43,12 @@ defmodule KubevirtToolsWeb.ExportController do
             |> put_resp_header("content-disposition", content_disposition_attachment(filename))
             |> send_resp(200, bin)
 
-          {:error, reason} ->
+          {:error, _reason} ->
             conn
-            |> put_flash(:error, "Could not build spreadsheet: #{inspect(reason)}")
+            |> put_flash(
+              :error,
+              "Could not build the spreadsheet. Try again or use CSV export."
+            )
             |> redirect(to: ~p"/dashboard")
         end
 
@@ -64,15 +68,22 @@ defmodule KubevirtToolsWeb.ExportController do
         |> halt()
 
       token ->
-        case KubeconfigStore.get(token) do
-          {:ok, _} ->
-            assign(conn, :kubevirt_token, token)
+        if SessionToken.valid_format?(token) do
+          case KubeconfigStore.get(token) do
+            {:ok, _} ->
+              assign(conn, :kubevirt_token, token)
 
-          :error ->
-            conn
-            |> put_flash(:error, "Session expired. Sign in again.")
-            |> redirect(to: ~p"/login")
-            |> halt()
+            :error ->
+              conn
+              |> put_flash(:error, "Session expired. Sign in again.")
+              |> redirect(to: ~p"/login")
+              |> halt()
+          end
+        else
+          conn
+          |> put_flash(:error, "Session expired. Sign in again.")
+          |> redirect(to: ~p"/login")
+          |> halt()
         end
     end
   end

@@ -1,6 +1,12 @@
 defmodule KubevirtToolsWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :kubevirt_tools
 
+  @max_multipart_body_bytes Application.compile_env(
+                              :kubevirt_tools,
+                              :kubeconfig_max_bytes,
+                              512_000
+                            )
+
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
   # Set :encryption_salt if you would also like to encrypt it.
@@ -45,7 +51,8 @@ defmodule KubevirtToolsWeb.Endpoint do
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
-    json_decoder: Phoenix.json_library()
+    json_decoder: Phoenix.json_library(),
+    length: @max_multipart_body_bytes
 
   plug Plug.MethodOverride
   plug Plug.Head

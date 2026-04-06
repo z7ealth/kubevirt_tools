@@ -29,13 +29,21 @@ defmodule KubevirtToolsWeb.WelcomeLive do
   @impl true
   def handle_event("skip_welcome", _params, socket) do
     socket = cancel_welcome_timer(socket)
-    {:noreply, push_navigate(socket, to: ~p"/dashboard")}
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "Connected to the cluster.")
+     |> push_navigate(to: ~p"/dashboard")}
   end
 
   @impl true
   def handle_info(:welcome_continue, socket) do
     socket = cancel_welcome_timer(socket)
-    {:noreply, push_navigate(socket, to: ~p"/dashboard")}
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "Connected to the cluster.")
+     |> push_navigate(to: ~p"/dashboard")}
   end
 
   defp cancel_welcome_timer(socket) do

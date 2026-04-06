@@ -4,6 +4,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   on_mount {KubevirtToolsWeb.AuthHooks, :require_kubeconfig}
 
   alias KubevirtTools.ClusterInventory
+  alias KubevirtTools.K8sSafeError
   alias KubevirtTools.ClusterMetrics
   alias KubevirtTools.DashboardCharts
   alias KubevirtTools.K8sConn
@@ -971,7 +972,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
         {:error, :invalid_session}
 
       {:error, reason} ->
-        {:error, reason}
+        {:error, K8sSafeError.user_facing(reason)}
     end
   end
 
@@ -1386,9 +1387,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     end)
   end
 
-  defp vm_error_text(%K8s.Client.HTTPError{message: m}) when is_binary(m), do: m
-  defp vm_error_text(%{message: m}) when is_binary(m), do: m
-  defp vm_error_text(other), do: inspect(other)
+  defp vm_error_text(err), do: K8sSafeError.user_facing(err)
 
   defp vm_meta(item, :namespace), do: get_in(item, ["metadata", "namespace"]) || "—"
   defp vm_meta(item, :name), do: get_in(item, ["metadata", "name"]) || "—"

@@ -2,6 +2,8 @@ defmodule KubevirtToolsWeb.SessionController do
   use KubevirtToolsWeb, :controller
 
   alias KubevirtTools.KubeconfigStore
+  alias KubevirtTools.KubeconfigVerify
+  alias KubevirtTools.SessionToken
 
   @session_key "kubevirt_token"
 
@@ -10,29 +12,39 @@ defmodule KubevirtToolsWeb.SessionController do
       %{"kubeconfig" => %Plug.Upload{path: path}} ->
         case File.read(path) do
           {:ok, yaml} ->
-            case K8s.Conn.from_string(yaml) do
-              {:ok, _conn} ->
-                token = KubeconfigStore.put(yaml)
-
+            with :ok <- KubeconfigVerify.validate_upload(yaml),
+                 {:ok, k8s_conn} <- KubeconfigVerify.parse_read_only_conn(yaml),
+                 :ok <- KubeconfigVerify.verify_api_reachable(k8s_conn),
+                 {:ok, token} <- KubeconfigStore.put(yaml) do
+              conn
+              |> put_session(@session_key, token)
+              |> redirect(to: ~p"/welcome")
+            else
+              {:error, msg} when is_binary(msg) ->
                 conn
-                |> put_session(@session_key, token)
-                |> put_flash(:info, "Connected to the cluster.")
-                |> redirect(to: ~p"/welcome")
-
-              {:error, %K8s.Conn.Error{} = err} ->
-                conn
-                |> put_flash(:error, "Invalid kubeconfig: #{err.message}")
+                |> put_flash(:error, msg)
                 |> redirect(to: ~p"/login")
 
-              {:error, other} ->
+              {:error, :too_large} ->
                 conn
-                |> put_flash(:error, "Invalid kubeconfig (#{inspect(other)}).")
+                |> put_flash(
+                  :error,
+                  "Kubeconfig is too large (max #{div(KubeconfigVerify.max_bytes(), 1024)} KB)."
+                )
+                |> redirect(to: ~p"/login")
+
+              _other ->
+                conn
+                |> put_flash(
+                  :error,
+                  "Could not use this kubeconfig. Check the file and cluster URL."
+                )
                 |> redirect(to: ~p"/login")
             end
 
-          {:error, posix} ->
+          {:error, _posix} ->
             conn
-            |> put_flash(:error, "Could not read uploaded file (#{inspect(posix)}).")
+            |> put_flash(:error, "Could not read the uploaded file.")
             |> redirect(to: ~p"/login")
         end
 
@@ -46,7 +58,7 @@ defmodule KubevirtToolsWeb.SessionController do
   def delete(conn, _params) do
     token = get_session(conn, @session_key)
 
-    if is_binary(token) do
+    if is_binary(token) and SessionToken.valid_format?(token) do
       KubeconfigStore.delete(token)
     end
 

@@ -10,6 +10,10 @@ import Config
 config :kubevirt_tools,
   generators: [timestamp_type: :utc_datetime]
 
+# Kubeconfig upload: max file size (bytes) and API reachability check at sign-in.
+config :kubevirt_tools, :kubeconfig_max_bytes, 512_000
+config :kubevirt_tools, :kubeconfig_connect_timeout_ms, 12_000
+
 # Instant-query timeout when calling the Prometheus HTTP API from the dashboard.
 config :kubevirt_tools, :prometheus_client_timeout_ms, 5_000
 

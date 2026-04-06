@@ -2,13 +2,15 @@ defmodule KubevirtTools.KubeconfigStore do
   @moduledoc false
   use GenServer
 
+  alias KubevirtTools.KubeconfigVerify
+
   @table :kubevirt_kubeconfig_by_token
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  @spec put(String.t()) :: String.t()
+  @spec put(String.t()) :: {:ok, String.t()} | {:error, :too_large}
   def put(yaml) when is_binary(yaml) do
     GenServer.call(__MODULE__, {:put, yaml})
   end
@@ -32,9 +34,13 @@ defmodule KubevirtTools.KubeconfigStore do
 
   @impl true
   def handle_call({:put, yaml}, _from, %{tid: tid} = state) do
-    token = :crypto.strong_rand_bytes(24) |> Base.url_encode64(padding: false)
-    :ets.insert(tid, {token, yaml})
-    {:reply, token, state}
+    if byte_size(yaml) > KubeconfigVerify.max_bytes() do
+      {:reply, {:error, :too_large}, state}
+    else
+      token = :crypto.strong_rand_bytes(24) |> Base.url_encode64(padding: false)
+      :ets.insert(tid, {token, yaml})
+      {:reply, {:ok, token}, state}
+    end
   end
 
   def handle_call({:get, token}, _from, %{tid: tid} = state) do

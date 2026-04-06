@@ -14,9 +14,9 @@ defmodule KubevirtTools.K8sReadOnlyMiddleware do
   @impl true
   def call(%Request{method: :get} = req), do: {:ok, req}
 
-  def call(%Request{method: method}) do
+  def call(%Request{method: _method}) do
     {:error,
      {:read_only_cluster,
-      "KubeVirt Tools only allows read-only API access (refused #{inspect(method)})"}}
+      "KubeVirt Tools only allows read-only API access — mutating requests are not permitted."}}
   end
 end

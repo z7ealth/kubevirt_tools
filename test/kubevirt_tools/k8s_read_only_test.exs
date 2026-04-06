@@ -33,7 +33,7 @@ defmodule KubevirtTools.K8sReadOnlyTest do
 
       assert {:error, {:read_only_cluster, msg}} = K8sReadOnlyMiddleware.call(req)
       assert msg =~ "read-only"
-      assert msg =~ "post"
+      assert msg =~ "mutating"
     end
   end
 
