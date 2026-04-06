@@ -41,6 +41,8 @@ KubeVirt Tools is not affiliated with those projects; it is an independent Phoen
 ## Quick start
 
 ```bash
+git clone https://github.com/z7ealth/kubevirt_tools.git
+cd kubevirt_tools
 mix setup
 mix phx.server
 ```
