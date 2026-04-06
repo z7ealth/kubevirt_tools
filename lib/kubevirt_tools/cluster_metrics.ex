@@ -361,4 +361,62 @@ defmodule KubevirtTools.ClusterMetrics do
       _ -> 1
     end
   end
+
+  @doc """
+  Per-node CPU and memory usage as a percentage of **allocatable** capacity when
+  `metrics-server` NodeMetrics exists for that node. Missing pairs return `"—"`.
+  """
+  @spec per_node_usage_pct(list(map()), list(map())) :: %{
+          String.t() => %{cpu: String.t(), mem: String.t()}
+        }
+  def per_node_usage_pct(nodes, node_metrics_items)
+      when is_list(nodes) and is_list(node_metrics_items) do
+    by_name = Map.new(node_metrics_items, fn m -> {node_name(m), m} end)
+
+    Enum.reduce(nodes, %{}, fn n, acc ->
+      name = node_name(n)
+
+      if name == "",
+        do: acc,
+        else: Map.put(acc, name, per_node_usage_pct_one(n, Map.get(by_name, name)))
+    end)
+  end
+
+  defp per_node_usage_pct_one(_n, nil), do: %{cpu: "—", mem: "—"}
+
+  defp per_node_usage_pct_one(n, m) do
+    cpu_s =
+      case {node_allocatable(n, "cpu"), metric_usage(m, "cpu")} do
+        {a, u} when is_binary(a) and is_binary(u) and a != "" and u != "" ->
+          ac = cpu_to_millicores(a)
+          uc = cpu_to_millicores(u)
+
+          if ac > 0 do
+            "#{min(100, round(uc * 100 / ac))}%"
+          else
+            "—"
+          end
+
+        _ ->
+          "—"
+      end
+
+    mem_s =
+      case {node_allocatable(n, "memory"), metric_usage(m, "memory")} do
+        {a, u} when is_binary(a) and is_binary(u) and a != "" and u != "" ->
+          ac = quantity_to_bytes(a)
+          uc = quantity_to_bytes(u)
+
+          if ac > 0 do
+            "#{min(100, round(uc * 100 / ac))}%"
+          else
+            "—"
+          end
+
+        _ ->
+          "—"
+      end
+
+    %{cpu: cpu_s, mem: mem_s}
+  end
 end

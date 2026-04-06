@@ -3,6 +3,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   on_mount {KubevirtToolsWeb.AuthHooks, :require_kubeconfig}
 
+  alias KubevirtTools.ClusterExportLists
   alias KubevirtTools.ClusterInventory
   alias KubevirtTools.K8sSafeError
   alias KubevirtTools.ClusterMetrics
@@ -28,7 +29,6 @@ defmodule KubevirtToolsWeb.DashboardLive do
       |> assign(:current_scope, %{})
       |> assign(:active_tab, :dashboard)
       |> assign(:prometheus_live, nil)
-      |> assign(:prometheus_retrying, false)
 
     socket =
       if connected?(socket) do
@@ -50,6 +50,10 @@ defmodule KubevirtToolsWeb.DashboardLive do
       case tab do
         "dashboard" -> :dashboard
         "vms" -> :vms
+        "networks" -> :networks
+        "disks" -> :disks
+        "storage_classes" -> :storage_classes
+        "hosts" -> :hosts
         "vm_topology" -> :vm_topology
         _ -> socket.assigns.active_tab
       end
@@ -67,23 +71,6 @@ defmodule KubevirtToolsWeb.DashboardLive do
   end
 
   @impl true
-  def handle_event("retry_prometheus", _params, socket) do
-    socket = assign(socket, :prometheus_retrying, true)
-
-    last =
-      try do
-        PrometheusMetricsServer.poll_now()
-      rescue
-        e -> {:error, Exception.message(e)}
-      end
-
-    {:noreply,
-     socket
-     |> assign(:prometheus_live, last)
-     |> assign(:prometheus_retrying, false)}
-  end
-
-  @impl true
   def handle_info({:prometheus_metrics, msg}, socket) do
     {:noreply, assign(socket, :prometheus_live, msg)}
   end
@@ -93,72 +80,98 @@ defmodule KubevirtToolsWeb.DashboardLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="space-y-6 -mt-4 max-w-full min-w-0">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-base-300/60 pb-4">
-          <div>
-            <p class="text-xs font-medium uppercase tracking-wider text-primary/90">Overview</p>
-            <h1 class="text-2xl font-semibold tracking-tight mt-1">KubeVirt Tools</h1>
-            <p class="text-sm text-base-content/60 mt-1">
-              Cluster-wide Virtualization Insights
-            </p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="text-xs text-base-content/50 hidden sm:inline">Export</span>
-            <.link
-              href={~p"/export/vms.xlsx"}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="btn btn-ghost btn-xs gap-1"
-              id="dashboard-export-xlsx"
-              title="Download VirtualMachines as Excel (vmInfo sheet)"
-            >
-              XLSX
-            </.link>
-            <.link
-              href={~p"/export/vms.csv"}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="btn btn-ghost btn-xs gap-1"
-              id="dashboard-export-csv"
-              title="Download VirtualMachines as CSV"
-            >
-              CSV
-            </.link>
-            <button
-              type="button"
-              phx-click="refresh"
-              id="dashboard-refresh"
-              class="btn btn-outline btn-sm gap-2"
-            >
-              <.icon name="hero-arrow-path" class="size-4" /> Refresh
-            </button>
-          </div>
-        </div>
-
         <div class="mt-4">
           <.async_result :let={data} assign={@kubevirt}>
             <:loading>
-              <div class="flex items-center gap-3 rounded-xl border border-base-300/70 bg-base-200/40 px-5 py-12 text-base-content/70">
-                <.icon name="hero-arrow-path" class="size-6 motion-safe:animate-spin" />
-                <span>Loading cluster snapshot…</span>
+              <div class="space-y-6">
+                <div class="border-b border-base-300/60 pb-4">
+                  <p class="text-xs font-medium uppercase tracking-wider text-primary/90">Overview</p>
+                  <h1 class="text-2xl font-semibold tracking-tight mt-1">KubeVirt Tools</h1>
+                  <p class="text-sm text-base-content/60 mt-1">
+                    Cluster-wide Virtualization Insights
+                  </p>
+                </div>
+                <div class="flex items-center gap-3 rounded-xl border border-base-300/70 bg-base-200/40 px-5 py-12 text-base-content/70">
+                  <.icon name="hero-arrow-path" class="size-6 motion-safe:animate-spin" />
+                  <span>Loading cluster snapshot…</span>
+                </div>
               </div>
             </:loading>
             <:failed :let={_failure}>
-              <div class="alert alert-error">
-                <.icon name="hero-exclamation-circle" class="size-5 shrink-0" />
-                <span>Could not load cluster data. Try refreshing or signing in again.</span>
+              <div class="space-y-4">
+                <div class="border-b border-base-300/60 pb-4">
+                  <p class="text-xs font-medium uppercase tracking-wider text-primary/90">Overview</p>
+                  <h1 class="text-2xl font-semibold tracking-tight mt-1">KubeVirt Tools</h1>
+                  <p class="text-sm text-base-content/60 mt-1">
+                    Cluster-wide Virtualization Insights
+                  </p>
+                </div>
+                <div class="alert alert-error">
+                  <.icon name="hero-exclamation-circle" class="size-5 shrink-0" />
+                  <span>Could not load cluster data. Try refreshing or signing in again.</span>
+                </div>
               </div>
             </:failed>
 
             <% m = metrics(data, @prometheus_live) %>
             <% snap = to_string(data.snapshot_at) %>
-            <.daisy_tabs
-              id="kubevirt-dashboard-tabs"
-              active={@active_tab}
-              event="set_tab"
-              tabs={dashboard_tab_defs()}
-              active_style={:outline_primary}
-              class="border-b border-base-300/50 pb-3 mb-0"
-            />
+            <div class="flex flex-col gap-4 pb-3 lg:flex-row lg:items-center lg:justify-between">
+              <div class="min-w-0">
+                <p class="text-xs font-medium uppercase tracking-wider text-primary/90">Overview</p>
+                <h1 class="text-2xl font-semibold tracking-tight mt-1">KubeVirt Tools</h1>
+                <p class="text-sm text-base-content/60 mt-1">
+                  Cluster-wide Virtualization Insights
+                </p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs text-base-content/50 hidden sm:inline">Export</span>
+                <.link
+                  href={~p"/export/vms.xlsx"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-ghost btn-xs gap-1"
+                  id="dashboard-export-xlsx"
+                  title="Download VirtualMachines as Excel (vmInfo sheet)"
+                >
+                  XLSX
+                </.link>
+                <.link
+                  href={~p"/export/vms.csv"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-ghost btn-xs gap-1"
+                  id="dashboard-export-csv"
+                  title="Download VirtualMachines as CSV"
+                >
+                  CSV
+                </.link>
+                <button
+                  type="button"
+                  phx-click="refresh"
+                  id="dashboard-refresh"
+                  class="btn btn-outline btn-sm gap-2"
+                >
+                  <.icon name="hero-arrow-path" class="size-4" /> Refresh
+                </button>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-base-300/50 pb-3 mb-0">
+              <.daisy_tabs
+                id="kubevirt-dashboard-tabs"
+                active={@active_tab}
+                event="set_tab"
+                tabs={dashboard_tab_defs()}
+                active_style={:outline_primary}
+                class="min-w-0 flex-1"
+              />
+              <div
+                id="dashboard-prometheus-nav-indicator"
+                class="flex shrink-0 items-center border-l border-base-300/40 pl-3 lg:pl-4"
+              >
+                <.prometheus_compact_indicator connected?={m.prometheus_ok?} url={m.prometheus_url} />
+              </div>
+            </div>
 
             <div class="mt-5">
               <.tab_panel
@@ -168,6 +181,16 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 class="space-y-8 scroll-mt-24"
               >
                 <div id="overview" class="space-y-8 pt-1">
+                  <div>
+                    <h2 class="text-lg font-medium flex items-center gap-2">
+                      <.icon name="hero-chart-bar-square" class="size-5 text-primary" />
+                      Cluster overview
+                      <.tab_heading_hint
+                        id="dashboard-tab-overview-hint"
+                        tip="Metrics and charts from a one-time cluster snapshot (VirtualMachines, VMIs, nodes, PVCs, storage classes, optional Prometheus). Use Refresh to reload data."
+                      />
+                    </h2>
+                  </div>
                   <div
                     :if={data.cluster}
                     class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs min-h-[1.75rem]"
@@ -178,18 +201,6 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     <span class="badge badge-ghost badge-sm gap-1 font-mono px-3 py-2 h-auto whitespace-normal text-base-content/80">
                       {data.user} @ {data.cluster}
                     </span>
-                  </div>
-
-                  <div
-                    id="dashboard-prometheus-status"
-                    class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-base-300/60 bg-base-200/25 px-3 py-2.5 sm:px-4"
-                  >
-                    <.prometheus_connection_status
-                      connected?={m.prometheus_ok?}
-                      url={m.prometheus_url}
-                      poll_caption={m.prometheus_poll_caption}
-                      retrying?={@prometheus_retrying}
-                    />
                   </div>
 
                   <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7 gap-2 sm:gap-3">
@@ -353,10 +364,11 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     <h2 class="text-lg font-medium flex items-center gap-2">
                       <.icon name="hero-computer-desktop" class="size-5 text-primary" />
                       Virtual machines
+                      <.tab_heading_hint
+                        id="dashboard-tab-vms-hint"
+                        tip="Each row is a VirtualMachine with live instance fields from the matching VMI (same namespace and name) when it exists."
+                      />
                     </h2>
-                    <p class="text-sm text-base-content/55 mt-1 max-w-3xl">
-                      Each row is a VirtualMachine with live instance fields from the matching VMI (same namespace and name) when it exists.
-                    </p>
                   </div>
                   <%= if data.vm_error do %>
                     <div class="alert alert-warning text-sm">
@@ -393,10 +405,11 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       <h3 class="text-base font-medium flex items-center gap-2">
                         <.icon name="hero-cpu-chip" class="size-5 text-secondary" />
                         VM instances without a VirtualMachine
+                        <.tab_heading_hint
+                          id="dashboard-tab-orphan-vmi-hint"
+                          tip="Usually short-lived (for example during delete); same columns as the main instance view."
+                        />
                       </h3>
-                      <p class="text-xs text-base-content/50">
-                        Usually short-lived (e.g. during delete); same columns as instance view.
-                      </p>
                       <.orphan_vmi_table items={orphans} id_prefix="orphan-vmi" />
                     </div>
                   <% end %>
@@ -405,10 +418,166 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
               <.tab_panel
                 root_id="kubevirt-dashboard-tabs"
+                tab={:networks}
+                active={@active_tab}
+                class="space-y-6 scroll-mt-24 pt-1"
+              >
+                <section id="vm-networks" class="space-y-3">
+                  <div>
+                    <h2 class="text-lg font-medium flex items-center gap-2">
+                      <.icon name="hero-wifi" class="size-5 text-primary" /> VM network interfaces
+                      <.tab_heading_hint
+                        id="dashboard-tab-networks-hint"
+                        tip="Declared on each VirtualMachine template (spec.template.spec.domain.devices.interfaces), with live MAC, IP, and guest interface name from the matching VMI when running."
+                      />
+                    </h2>
+                  </div>
+                  <%= if data.vm_error do %>
+                    <div class="alert alert-warning text-sm">
+                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                      <span>
+                        Could not list VirtualMachines ({vm_error_text(data.vm_error)}).
+                      </span>
+                    </div>
+                  <% end %>
+                  <%= if data.vm_error == nil do %>
+                    <.vm_network_interfaces_table
+                      vms={data.vms}
+                      vmis={if(data.vmi_error, do: [], else: data.vmis)}
+                      id_prefix="vm-net"
+                    />
+                  <% end %>
+                </section>
+              </.tab_panel>
+
+              <.tab_panel
+                root_id="kubevirt-dashboard-tabs"
+                tab={:disks}
+                active={@active_tab}
+                class="space-y-6 scroll-mt-24 pt-1"
+              >
+                <section id="vm-disks" class="space-y-3">
+                  <div>
+                    <h2 class="text-lg font-medium flex items-center gap-2">
+                      <.icon name="hero-circle-stack" class="size-5 text-primary" />
+                      VM disks &amp; volumes
+                      <.tab_heading_hint
+                        id="dashboard-tab-disks-hint"
+                        tip="Block devices from spec.template.spec.domain.devices.disks linked to template volumes; size and storage class use DataVolume templates and cluster PVCs when resolvable."
+                      />
+                    </h2>
+                  </div>
+                  <%= if data.vm_error do %>
+                    <div class="alert alert-warning text-sm">
+                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                      <span>
+                        Could not list VirtualMachines ({vm_error_text(data.vm_error)}).
+                      </span>
+                    </div>
+                  <% end %>
+                  <%= if data.vm_error == nil do %>
+                    <.vm_disks_detail_table
+                      vms={data.vms}
+                      pvcs={List.wrap(data.pvcs)}
+                      id_prefix="vm-disk"
+                    />
+                  <% end %>
+                </section>
+              </.tab_panel>
+
+              <.tab_panel
+                root_id="kubevirt-dashboard-tabs"
+                tab={:storage_classes}
+                active={@active_tab}
+                class="space-y-6 scroll-mt-24 pt-1"
+              >
+                <section id="cluster-storage-classes" class="space-y-3">
+                  <div>
+                    <h2 class="text-lg font-medium flex items-center gap-2">
+                      <.icon name="hero-archive-box" class="size-5 text-primary" /> Storage classes
+                      <.tab_heading_hint
+                        id="dashboard-tab-storage-classes-hint"
+                        tip="Cluster-scoped StorageClass objects from storage.k8s.io/v1. PVC counts use spec.storageClassName from all namespaces; PVCs with no class set are listed separately. Names on PVCs that do not match any listed class may be typos or removed classes."
+                      />
+                    </h2>
+                  </div>
+                  <%= if data.storage_class_error do %>
+                    <div class="alert alert-warning text-sm">
+                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                      <span>
+                        Could not list StorageClasses ({vm_error_text(data.storage_class_error)}).
+                      </span>
+                    </div>
+                  <% end %>
+                  <%= if data.storage_class_error == nil do %>
+                    <.storage_classes_table
+                      storage_classes={List.wrap(data.storage_classes)}
+                      pvcs={List.wrap(data.pvcs)}
+                      id_prefix="storage-class"
+                    />
+                  <% end %>
+                </section>
+              </.tab_panel>
+
+              <.tab_panel
+                root_id="kubevirt-dashboard-tabs"
+                tab={:hosts}
+                active={@active_tab}
+                class="space-y-6 scroll-mt-24 pt-1"
+              >
+                <section id="cluster-hosts" class="space-y-3">
+                  <div>
+                    <h2 class="text-lg font-medium flex items-center gap-2">
+                      <.icon name="hero-server-stack" class="size-5 text-primary" /> Hosts (nodes)
+                      <.tab_heading_hint
+                        id="dashboard-tab-hosts-hint"
+                        tip="Kubernetes Nodes from the cluster API (status.addresses, allocatable resources, conditions). CPU and memory % prefer metrics-server NodeMetrics; when that API is missing, values are taken from Prometheus node_exporter (same queries as the dashboard) when scrape targets match the node name, hostname, or internal IP. VMIs counts use VMI status.nodeName."
+                      />
+                    </h2>
+                  </div>
+                  <%= if data.node_error do %>
+                    <div class="alert alert-warning text-sm">
+                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                      <span>
+                        Could not list Nodes ({vm_error_text(data.node_error)}).
+                      </span>
+                    </div>
+                  <% end %>
+                  <%= if data.metrics_error && not m.prometheus_ok? do %>
+                    <div class="alert alert-warning text-sm py-2">
+                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                      <span>
+                        metrics-server NodeMetrics is unavailable ({vm_error_text(data.metrics_error)}). {cluster_usage_prometheus_hint_text()}
+                      </span>
+                    </div>
+                  <% end %>
+                  <%= if data.node_error == nil do %>
+                    <.hosts_nodes_table
+                      nodes={List.wrap(data.nodes)}
+                      vmis={if(data.vmi_error, do: [], else: data.vmis)}
+                      node_metrics={List.wrap(data.node_metrics)}
+                      prometheus_node_detail={m.prometheus_node_detail}
+                      id_prefix="host"
+                    />
+                  <% end %>
+                </section>
+              </.tab_panel>
+
+              <.tab_panel
+                root_id="kubevirt-dashboard-tabs"
                 tab={:vm_topology}
                 active={@active_tab}
-                class="scroll-mt-24 pt-1 min-w-0"
+                class="scroll-mt-24 pt-1 min-w-0 space-y-3"
               >
+                <div>
+                  <h2 class="text-lg font-medium flex items-center gap-2">
+                    <.icon name="hero-squares-2x2" class="size-5 text-primary" /> Topology
+                    <.tab_heading_hint
+                      id="dashboard-tab-topology-hint"
+                      tip="VMs are linked to cluster nodes using each VMI status.nodeName (matching VM and VMI name and namespace). Stopped VMs without a VMI appear under Unscheduled."
+                    />
+                  </h2>
+                </div>
                 <section
                   id="vm-topology-root"
                   data-vm-topology-root
@@ -538,17 +707,38 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     </div>
                   </div>
                 </section>
-                <p class="text-xs text-base-content/50 mt-3 px-1">
-                  VMs are linked to cluster nodes using each VMI’s
-                  <code class="text-[0.7rem] opacity-90">status.nodeName</code>
-                  (matching VM/VMI name and namespace). Stopped VMs without a VMI appear under <span class="font-medium">Unscheduled</span>.
-                </p>
               </.tab_panel>
             </div>
           </.async_result>
         </div>
       </div>
     </Layouts.app>
+    """
+  end
+
+  attr :tip, :string,
+    required: true,
+    doc: "Shown on hover (title) and for screen readers (aria-label)"
+
+  attr :id, :string, default: nil
+
+  defp tab_heading_hint(assigns) do
+    ~H"""
+    <span
+      id={@id}
+      class={[
+        "inline-flex shrink-0 rounded-full p-0.5 -m-0.5",
+        "text-base-content/45 hover:text-primary cursor-help",
+        "outline-none transition-colors duration-200",
+        "focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-2",
+        "focus-visible:ring-offset-base-100"
+      ]}
+      tabindex="0"
+      aria-label={@tip}
+      title={@tip}
+    >
+      <.icon name="hero-information-circle" class="size-5" />
+    </span>
     """
   end
 
@@ -585,51 +775,27 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   attr :connected?, :boolean, required: true
   attr :url, :string, required: true
-  attr :poll_caption, :string, required: true
-  attr :retrying?, :boolean, default: false
 
-  defp prometheus_connection_status(assigns) do
+  defp prometheus_compact_indicator(assigns) do
     ~H"""
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 min-w-0 w-full">
-      <span class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/55 shrink-0 leading-snug">
-        Prometheus
-      </span>
+    <div
+      class="inline-flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50"
+      title={@url}
+    >
+      <span>Prometheus</span>
       <%= if @connected? do %>
-        <%!-- DaisyUI status + ping — https://daisyui.com/components/status/ --%>
-        <div class="inline-grid *:[grid-area:1/1] place-items-center shrink-0" aria-hidden="true">
-          <div class="status status-success animate-ping"></div>
-          <div class="status status-success"></div>
+        <%!-- DaisyUI status dot + Tailwind ping halo (status styles can mute ping on the same node) --%>
+        <div class="relative flex h-3 w-3 shrink-0 items-center justify-center" aria-hidden="true">
+          <span class="absolute h-2.5 w-2.5 rounded-full bg-success/55 motion-safe:animate-ping">
+          </span>
+          <div class="relative z-[1] status status-success"></div>
         </div>
-        <span class="text-sm font-medium text-success shrink-0 leading-snug">Connected</span>
       <% else %>
         <div class="status status-warning shrink-0" aria-hidden="true"></div>
-        <span class="text-sm font-medium text-warning shrink-0 leading-snug">Not connected</span>
-        <button
-          type="button"
-          phx-click="retry_prometheus"
-          id="dashboard-prometheus-retry"
-          disabled={@retrying?}
-          class={[
-            "btn btn-outline btn-primary btn-xs gap-1 shrink-0",
-            @retrying? && "btn-disabled pointer-events-none"
-          ]}
-          title="Fetch Prometheus now (resets the poll timer)"
-        >
-          <.icon
-            name="hero-arrow-path"
-            class={["size-3.5", @retrying? && "motion-safe:animate-spin"]}
-          /> Retry
-        </button>
       <% end %>
-      <div class="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
-        <span class="text-xs leading-normal text-base-content/45 shrink-0">{@poll_caption}</span>
-        <span
-          class="inline-block max-w-full min-w-0 truncate text-xs leading-normal font-mono text-base-content/40 sm:max-w-md"
-          title={@url}
-        >
-          {@url}
-        </span>
-      </div>
+      <span class="sr-only">
+        {if @connected?, do: "reachable", else: "not reachable"}
+      </span>
     </div>
     """
   end
@@ -684,7 +850,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 <.icon name="hero-puzzle-piece" class="size-5 shrink-0 opacity-90" />
                 <div class="min-w-0">
                   <p class="font-semibold text-[0.65rem] uppercase tracking-wide text-warning-content/90">
-                    Placeholder — connect Prometheus
+                    Prometheus not detected!
                   </p>
                   <p class="mt-1.5 text-warning-content/95">{@overlay}</p>
                 </div>
@@ -752,7 +918,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
               <.icon name="hero-puzzle-piece" class="size-5 shrink-0 opacity-90" />
               <div class="min-w-0">
                 <p class="font-semibold text-[0.65rem] uppercase tracking-wide text-warning-content/90">
-                  Placeholder — connect Prometheus
+                  Prometheus not detected!
                 </p>
                 <p class="mt-1.5 text-warning-content/95">
                   {cluster_usage_prometheus_hint_text()}
@@ -929,11 +1095,360 @@ defmodule KubevirtToolsWeb.DashboardLive do
     """
   end
 
+  attr :vms, :list, required: true
+  attr :vmis, :list, default: []
+  attr :id_prefix, :string, required: true
+
+  defp vm_network_interfaces_table(assigns) do
+    rows = vm_network_table_rows(assigns.vms, List.wrap(assigns.vmis))
+    assigns = assign(assigns, :rows, rows)
+
+    ~H"""
+    <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
+      <table class="table table-sm">
+        <thead class="bg-base-200/60 text-base-content/80">
+          <tr>
+            <th>Namespace</th>
+            <th>VM</th>
+            <th>Interface</th>
+            <th>Model</th>
+            <th>Binding</th>
+            <th>MAC (spec)</th>
+            <th>MAC (VMI)</th>
+            <th>IP addresses</th>
+            <th>Guest iface</th>
+            <th>VMI phase</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :if={@rows == []}>
+            <td colspan="10" class="text-center text-base-content/50 py-8">
+              No network interfaces defined on any VirtualMachine.
+            </td>
+          </tr>
+          <%= for {row, i} <- Enum.with_index(@rows) do %>
+            <tr id={"#{@id_prefix}-row-#{i}"} class="hover:bg-base-200/40 transition-colors">
+              <td class="font-mono text-xs whitespace-nowrap">{row.namespace}</td>
+              <td class="font-medium whitespace-nowrap">{row.vm_name}</td>
+              <td class="text-xs font-mono text-base-content/80">{row.iface_name}</td>
+              <td class="text-xs">{row.model}</td>
+              <td class="text-xs whitespace-nowrap">{row.binding}</td>
+              <td class="font-mono text-xs text-base-content/70">{row.mac_spec}</td>
+              <td class="font-mono text-xs text-base-content/70">{row.mac_live}</td>
+              <td
+                class="font-mono text-xs text-base-content/80 max-w-[14rem] truncate"
+                title={row.ips}
+              >
+                {row.ips}
+              </td>
+              <td class="font-mono text-xs text-base-content/70">{row.guest_iface}</td>
+              <td>
+                <span class="badge badge-sm badge-ghost">{row.vmi_phase}</span>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  attr :vms, :list, required: true
+  attr :pvcs, :list, default: []
+  attr :id_prefix, :string, required: true
+
+  defp vm_disks_detail_table(assigns) do
+    rows = vm_disk_detail_rows(assigns.vms, List.wrap(assigns.pvcs))
+    assigns = assign(assigns, :rows, rows)
+
+    ~H"""
+    <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
+      <table class="table table-sm">
+        <thead class="bg-base-200/60 text-base-content/80">
+          <tr>
+            <th>Namespace</th>
+            <th>VM</th>
+            <th>Disk</th>
+            <th>Device</th>
+            <th>Bus</th>
+            <th>Boot</th>
+            <th>Removable</th>
+            <th>Volume kind</th>
+            <th>Source</th>
+            <th>Size</th>
+            <th>Storage class</th>
+            <th>PVC phase</th>
+            <th>Serial</th>
+            <th>Cache</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :if={@rows == []}>
+            <td colspan="14" class="text-center text-base-content/50 py-8">
+              No disks defined on any VirtualMachine.
+            </td>
+          </tr>
+          <%= for {row, i} <- Enum.with_index(@rows) do %>
+            <tr id={"#{@id_prefix}-row-#{i}"} class="hover:bg-base-200/40 transition-colors">
+              <td class="font-mono text-xs whitespace-nowrap">{row.namespace}</td>
+              <td class="font-medium whitespace-nowrap">{row.vm_name}</td>
+              <td class="text-xs font-mono text-base-content/80">{row.disk_name}</td>
+              <td class="text-xs">{row.device_kind}</td>
+              <td class="text-xs font-mono">{row.bus}</td>
+              <td class="text-xs tabular-nums">{row.boot_order}</td>
+              <td>
+                <%= if row.removable? do %>
+                  <span class="badge badge-xs badge-warning">Yes</span>
+                <% else %>
+                  <span class="text-xs text-base-content/45">No</span>
+                <% end %>
+              </td>
+              <td class="text-xs whitespace-nowrap">{row.volume_kind}</td>
+              <td
+                class="text-xs font-mono text-base-content/75 max-w-[12rem] truncate"
+                title={row.source}
+              >
+                {row.source}
+              </td>
+              <td class="text-xs tabular-nums whitespace-nowrap">{row.size}</td>
+              <td class="text-xs max-w-[8rem] truncate" title={row.storage_class}>
+                {row.storage_class}
+              </td>
+              <td class="text-xs">{row.pvc_phase}</td>
+              <td class="font-mono text-xs text-base-content/65">{row.serial}</td>
+              <td class="text-xs font-mono text-base-content/65">{row.cache}</td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  attr :storage_classes, :list, required: true
+  attr :pvcs, :list, required: true
+  attr :id_prefix, :string, required: true
+
+  defp storage_classes_table(assigns) do
+    pvc_by_class = pvc_counts_by_storage_class_name(assigns.pvcs)
+    sc_names = storage_class_name_set(assigns.storage_classes)
+    rows = storage_classes_table_rows(assigns.storage_classes, pvc_by_class)
+    orphan_refs = orphan_storage_class_refs_with_counts(pvc_by_class, sc_names)
+    unset_count = Map.get(pvc_by_class, "", 0)
+
+    assigns =
+      assigns
+      |> assign(:rows, rows)
+      |> assign(:orphan_refs, orphan_refs)
+      |> assign(:unset_count, unset_count)
+
+    ~H"""
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-base-content/70 mb-2">
+      <span>
+        <span class="font-semibold text-base-content/85 tabular-nums">
+          {length(@storage_classes)}
+        </span>
+        storage class{if length(@storage_classes) == 1, do: "", else: "es"}
+      </span>
+      <span :if={@unset_count > 0}>
+        <span class="font-semibold text-base-content/85 tabular-nums">{@unset_count}</span>
+        PVC{if @unset_count == 1, do: "", else: "s"} with no storageClassName
+      </span>
+    </div>
+    <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
+      <table class="table table-sm">
+        <thead class="bg-base-200/60 text-base-content/80">
+          <tr>
+            <th>Name</th>
+            <th>Default</th>
+            <th>Provisioner</th>
+            <th>Reclaim</th>
+            <th>Binding</th>
+            <th title="spec.allowVolumeExpansion">Expand</th>
+            <th title="PVCs in the cluster using this storageClassName">PVCs</th>
+            <th>Parameters</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :if={@rows == []}>
+            <td colspan="8" class="text-center text-base-content/50 py-8">
+              No StorageClass objects returned from the API.
+            </td>
+          </tr>
+          <%= for {row, i} <- Enum.with_index(@rows) do %>
+            <tr id={"#{@id_prefix}-row-#{i}"} class="hover:bg-base-200/40 transition-colors">
+              <td class="font-mono text-xs font-medium whitespace-nowrap">{row.name}</td>
+              <td>
+                <%= if row.default? do %>
+                  <span class="badge badge-xs badge-primary">default</span>
+                <% else %>
+                  <span class="text-xs text-base-content/40">—</span>
+                <% end %>
+              </td>
+              <td
+                class="text-xs font-mono text-base-content/80 max-w-[14rem] truncate"
+                title={row.provisioner}
+              >
+                {row.provisioner}
+              </td>
+              <td class="text-xs whitespace-nowrap">{row.reclaim}</td>
+              <td class="text-xs whitespace-nowrap">{row.binding}</td>
+              <td class="text-xs">
+                <%= cond do %>
+                  <% row.expand == true -> %>
+                    <span class="badge badge-xs badge-success">Yes</span>
+                  <% row.expand == false -> %>
+                    <span class="text-base-content/50">No</span>
+                  <% true -> %>
+                    <span class="text-base-content/40">—</span>
+                <% end %>
+              </td>
+              <td class="text-xs tabular-nums font-medium">{row.pvc_count}</td>
+              <td
+                class="text-xs font-mono text-base-content/70 max-w-[18rem] truncate"
+                title={row.parameters_full}
+              >
+                {row.parameters_display}
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    <div
+      :if={@orphan_refs != []}
+      class="alert alert-warning text-sm py-3"
+      id="dashboard-storage-class-orphan-pvcs"
+    >
+      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+      <div>
+        <p class="font-medium">PVCs reference unknown storage classes</p>
+        <p class="text-xs opacity-90 mt-1">
+          These names appear on PVCs but do not match any listed StorageClass:
+          <span class="font-mono">
+            {orphan_storage_class_refs_pretty(@orphan_refs)}
+          </span>
+        </p>
+      </div>
+    </div>
+    """
+  end
+
+  attr :nodes, :list, required: true
+  attr :vmis, :list, default: []
+  attr :node_metrics, :list, default: []
+  attr :prometheus_node_detail, :map, default: %{}
+  attr :id_prefix, :string, required: true
+
+  defp hosts_nodes_table(assigns) do
+    merged =
+      hosts_merged_usage_map(
+        assigns.nodes,
+        assigns.node_metrics,
+        assigns.prometheus_node_detail || %{}
+      )
+
+    rows = hosts_table_rows(assigns.nodes, assigns.vmis, merged)
+    assigns = assign(assigns, :rows, rows)
+
+    ~H"""
+    <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
+      <table class="table table-sm">
+        <thead class="bg-base-200/60 text-base-content/80">
+          <tr>
+            <th>Name</th>
+            <th>Ready</th>
+            <th>Scheduling</th>
+            <th>Role</th>
+            <th>VMIs</th>
+            <th title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target">
+              CPU %
+            </th>
+            <th title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target">
+              Mem %
+            </th>
+            <th>Internal IP</th>
+            <th>External IP</th>
+            <th title="status.allocatable.cpu">CPU (alloc.)</th>
+            <th title="status.allocatable.memory">Memory (alloc.)</th>
+            <th title="status.allocatable.pods">Max pods</th>
+            <th>Kubelet</th>
+            <th>OS / arch</th>
+            <th title="status.nodeInfo.containerRuntimeVersion">Runtime</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :if={@rows == []}>
+            <td colspan="15" class="text-center text-base-content/50 py-8">
+              No nodes returned from the API.
+            </td>
+          </tr>
+          <%= for {row, i} <- Enum.with_index(@rows) do %>
+            <tr
+              id={"#{@id_prefix}-row-#{i}"}
+              class="hover:bg-base-200/40 transition-colors"
+              title={row.scheduling_hint}
+            >
+              <td class="font-mono text-xs font-medium whitespace-nowrap">{row.name}</td>
+              <td>
+                <%= if row.is_ready do %>
+                  <span class="badge badge-sm badge-success">Yes</span>
+                <% else %>
+                  <span class="badge badge-sm badge-error">No</span>
+                <% end %>
+              </td>
+              <td class="text-xs whitespace-nowrap">{row.scheduling}</td>
+              <td>
+                <span class="badge badge-sm badge-ghost font-mono text-[0.7rem]">{row.role}</span>
+              </td>
+              <td class="text-xs tabular-nums font-medium">{row.vmi_count}</td>
+              <td class="text-xs tabular-nums">{row.cpu_pct}</td>
+              <td class="text-xs tabular-nums">{row.mem_pct}</td>
+              <td
+                class="font-mono text-xs text-base-content/80 max-w-[9rem] truncate"
+                title={row.internal_ip}
+              >
+                {row.internal_ip}
+              </td>
+              <td
+                class="font-mono text-xs text-base-content/70 max-w-[9rem] truncate"
+                title={row.external_ip}
+              >
+                {row.external_ip}
+              </td>
+              <td class="text-xs font-mono tabular-nums">{row.cpu_alloc}</td>
+              <td class="text-xs font-mono tabular-nums">{row.mem_alloc}</td>
+              <td class="text-xs tabular-nums">{row.pods_alloc}</td>
+              <td
+                class="text-xs font-mono text-base-content/75 max-w-[8rem] truncate"
+                title={row.kubelet}
+              >
+                {row.kubelet}
+              </td>
+              <td class="text-xs max-w-[10rem] truncate" title={row.os_arch}>{row.os_arch}</td>
+              <td
+                class="text-xs font-mono text-base-content/65 max-w-[12rem] truncate"
+                title={row.runtime}
+              >
+                {row.runtime}
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
   defp dashboard_tab_defs do
     [
       %{id: :dashboard, label: "Dashboard"},
       %{id: :vms, label: "VMs"},
-      %{id: :vm_topology, label: "VM Topology"}
+      %{id: :networks, label: "Networks"},
+      %{id: :disks, label: "Disks"},
+      %{id: :storage_classes, label: "Storage classes"},
+      %{id: :hosts, label: "Hosts"},
+      %{id: :vm_topology, label: "Topology"}
     ]
   end
 
@@ -944,6 +1459,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       {vmis, vmi_err} = safe_list(&KubeVirt.list_virtual_machine_instances/1, conn)
       {nodes, node_err} = safe_list(&ClusterInventory.list_nodes/1, conn)
       {pvcs, pvc_err} = safe_list(&ClusterInventory.list_pvcs/1, conn)
+      {storage_classes, sc_err} = safe_list(&ClusterExportLists.list_storage_classes/1, conn)
       {node_metrics, metrics_err} = safe_list(&ClusterMetrics.list_node_metrics/1, conn)
 
       prometheus = prometheus_bootstrap_from_server_or_client()
@@ -957,6 +1473,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
            vmis: vmis,
            nodes: nodes,
            pvcs: pvcs,
+           storage_classes: storage_classes,
            node_metrics: node_metrics,
            metrics_error: metrics_err,
            prometheus: prometheus,
@@ -964,6 +1481,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
            vmi_error: vmi_err,
            node_error: node_err,
            pvc_error: pvc_err,
+           storage_class_error: sc_err,
            snapshot_at: System.system_time(:millisecond)
          }
        }}
@@ -1044,11 +1562,6 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
     node_metrics = Map.get(data, :node_metrics) || []
 
-    prom_poll_ms =
-      Application.get_env(:kubevirt_tools, :prometheus_poll_interval_ms, 300_000)
-
-    prom_poll_label = prometheus_poll_interval_label(prom_poll_ms)
-
     embed =
       Map.get(data, :prometheus) ||
         %{ok: false, error: "unavailable", url: PrometheusSetup.base_url()}
@@ -1057,7 +1570,6 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
     prom_ok? = prom[:ok] == true
     prom_url = prom[:url] || PrometheusSetup.base_url()
-    prom_poll_caption = "Polled every #{prom_poll_label}"
 
     usage = ClusterMetrics.usage_summary(nodes, node_metrics, pvcs)
 
@@ -1131,26 +1643,12 @@ defmodule KubevirtToolsWeb.DashboardLive do
       usage_mem_overlay: usage_mem_overlay,
       prometheus_ok?: prom_ok?,
       prometheus_url: prom_url,
-      prometheus_poll_caption: prom_poll_caption,
       node_load_from_prometheus?: node_load_from_prometheus?,
       node_load_buckets: load_buckets,
       prom_chart_rev: prom_chart_rev,
-      node_load_chart_height_px: node_load_chart_height_px
+      node_load_chart_height_px: node_load_chart_height_px,
+      prometheus_node_detail: prom[:node_detail] || %{}
     }
-  end
-
-  defp prometheus_poll_interval_label(ms)
-       when is_integer(ms) and ms > 0 do
-    cond do
-      rem(ms, 60_000) == 0 and ms >= 60_000 ->
-        "#{div(ms, 60_000)} min"
-
-      rem(ms, 1_000) == 0 and ms >= 1_000 ->
-        "#{div(ms, 1_000)} s"
-
-      true ->
-        "#{ms} ms"
-    end
   end
 
   defp resolve_prometheus_embed(embed, prom_live) do
@@ -1356,6 +1854,114 @@ defmodule KubevirtToolsWeb.DashboardLive do
     series = Enum.map(labels, fn l -> length(Map.get(grouped, l, [])) end)
     {labels, series}
   end
+
+  defp pvc_counts_by_storage_class_name(pvcs) when is_list(pvcs) do
+    pvcs
+    |> Enum.map(fn p ->
+      sc = get_in(p, ["spec", "storageClassName"])
+
+      if sc in [nil, ""] do
+        ""
+      else
+        to_string(sc)
+      end
+    end)
+    |> Enum.frequencies()
+  end
+
+  defp storage_class_name_set(storage_classes) when is_list(storage_classes) do
+    MapSet.new(
+      for sc <- storage_classes,
+          n = get_in(sc, ["metadata", "name"]),
+          is_binary(n),
+          do: n
+    )
+  end
+
+  defp orphan_storage_class_refs_with_counts(pvc_by_class, sc_names) do
+    pvc_by_class
+    |> Enum.reject(fn {k, _} -> k == "" end)
+    |> Enum.reject(fn {k, _} -> MapSet.member?(sc_names, k) end)
+    |> Enum.sort_by(&elem(&1, 0))
+  end
+
+  defp orphan_storage_class_refs_pretty([]), do: ""
+
+  defp orphan_storage_class_refs_pretty(refs) do
+    refs
+    |> Enum.map(fn {name, n} ->
+      if n == 1, do: "#{name} (1 PVC)", else: "#{name} (#{n} PVCs)"
+    end)
+    |> Enum.join(", ")
+  end
+
+  defp storage_classes_table_rows(storage_classes, pvc_by_class) when is_list(storage_classes) do
+    storage_classes
+    |> Enum.sort_by(&get_in(&1, ["metadata", "name"]))
+    |> Enum.map(&storage_class_table_row(&1, pvc_by_class))
+  end
+
+  defp storage_class_table_row(sc, pvc_by_class) do
+    name = get_in(sc, ["metadata", "name"]) || "—"
+    default? = storage_class_default_annotation?(sc)
+    provisioner = get_in(sc, ["provisioner"]) |> format_cell()
+    reclaim = format_sc_reclaim(get_in(sc, ["reclaimPolicy"]))
+    binding = format_sc_binding(get_in(sc, ["volumeBindingMode"]))
+    expand = get_in(sc, ["allowVolumeExpansion"])
+    pvc_count = Map.get(pvc_by_class, name, 0)
+    {display, full} = storage_class_parameters_display(get_in(sc, ["parameters"]))
+
+    %{
+      name: name,
+      default?: default?,
+      provisioner: provisioner,
+      reclaim: reclaim,
+      binding: binding,
+      expand: expand,
+      pvc_count: pvc_count,
+      parameters_display: display,
+      parameters_full: full
+    }
+  end
+
+  defp storage_class_default_annotation?(sc) do
+    case get_in(sc, ["metadata", "annotations", "storageclass.kubernetes.io/is-default-class"]) do
+      "true" -> true
+      true -> true
+      _ -> false
+    end
+  end
+
+  defp format_sc_reclaim(nil), do: "Delete"
+  defp format_sc_reclaim(""), do: "Delete"
+  defp format_sc_reclaim(s), do: to_string(s)
+
+  defp format_sc_binding(nil), do: "Immediate"
+  defp format_sc_binding(""), do: "Immediate"
+  defp format_sc_binding(s), do: to_string(s)
+
+  defp storage_class_parameters_display(nil), do: {"—", ""}
+
+  defp storage_class_parameters_display(params) when params == %{}, do: {"—", ""}
+
+  defp storage_class_parameters_display(params) when is_map(params) do
+    full =
+      params
+      |> Enum.sort_by(fn {k, _} -> to_string(k) end)
+      |> Enum.map(fn {k, v} -> "#{k}=#{v}" end)
+      |> Enum.join(", ")
+
+    display =
+      if String.length(full) > 80 do
+        String.slice(full, 0, 77) <> "..."
+      else
+        full
+      end
+
+    {display, full}
+  end
+
+  defp storage_class_parameters_display(_), do: {"—", ""}
 
   defp node_ready?(node) do
     conditions = get_in(node, ["status", "conditions"]) || []
@@ -1812,6 +2418,507 @@ defmodule KubevirtToolsWeb.DashboardLive do
   defp k8s_storage_suffix_to_gib_multiplier("ti"), do: 1024.0
   defp k8s_storage_suffix_to_gib_multiplier("t"), do: 1024.0
   defp k8s_storage_suffix_to_gib_multiplier(_), do: 0.0
+
+  defp vm_network_table_rows(vms, vmis) when is_list(vms) do
+    lookup = vmi_index_by_ns_name(vmis)
+
+    Enum.flat_map(vms, fn vm ->
+      vmi = vmi_lookup_match(lookup, vm)
+
+      ifaces =
+        get_in(vm, ["spec", "template", "spec", "domain", "devices", "interfaces"]) || []
+
+      status_by_name = vmi_status_interfaces_by_name(vmi)
+
+      Enum.map(ifaces, fn iface ->
+        iname = iface["name"] || "—"
+        live = Map.get(status_by_name, iname, %{})
+
+        %{
+          namespace: vm_meta(vm, :namespace),
+          vm_name: vm_meta(vm, :name),
+          iface_name: iname,
+          model: format_cell(iface["model"]),
+          binding: interface_binding_label(iface),
+          mac_spec: format_cell(iface["macAddress"]),
+          mac_live: format_cell(live["mac"]),
+          ips: format_iface_ips_display(live),
+          guest_iface: format_cell(live["interfaceName"]),
+          vmi_phase: if(vmi, do: vmi_phase(vmi), else: "—")
+        }
+      end)
+    end)
+  end
+
+  defp vmi_status_interfaces_by_name(nil), do: %{}
+
+  defp vmi_status_interfaces_by_name(vmi) do
+    ifaces = get_in(vmi, ["status", "interfaces"]) || []
+    Map.new(ifaces, fn i -> {i["name"], i} end)
+  end
+
+  defp interface_binding_label(iface) when is_map(iface) do
+    cond do
+      Map.has_key?(iface, "bridge") -> "bridge"
+      Map.has_key?(iface, "masquerade") -> "masquerade"
+      Map.has_key?(iface, "srIov") or Map.has_key?(iface, "sriov") -> "SR-IOV"
+      Map.has_key?(iface, "macvtap") -> "macvtap"
+      Map.has_key?(iface, "passthrough") -> "passthrough"
+      Map.has_key?(iface, "slirp") -> "slirp"
+      Map.has_key?(iface, "binding") -> "binding"
+      true -> "default"
+    end
+  end
+
+  defp format_iface_ips_display(iface) when is_map(iface) do
+    ips = List.wrap(iface["ipAddresses"])
+    primary = iface["ipAddress"]
+
+    list =
+      if is_binary(primary) and primary != "" do
+        [primary | ips]
+      else
+        ips
+      end
+
+    joined =
+      list
+      |> Enum.filter(&is_binary/1)
+      |> Enum.flat_map(&String.split(&1, ",", trim: true))
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.uniq()
+      |> Enum.join(", ")
+
+    if joined == "", do: "—", else: joined
+  end
+
+  defp format_iface_ips_display(_), do: "—"
+
+  defp vm_disk_detail_rows(vms, pvcs) when is_list(vms) do
+    pvc_by_ns_claim = pvc_requests_by_namespace_claim(pvcs)
+    pvc_info = pvc_extended_info_by_ns_claim(pvcs)
+
+    Enum.flat_map(vms, fn vm ->
+      vol_by_name = vm_template_volume_by_name(vm)
+      dvt_by_name = vm_data_volume_template_by_name(vm)
+      vm_ns = vm_meta(vm, :namespace)
+
+      disks =
+        get_in(vm, ["spec", "template", "spec", "domain", "devices", "disks"]) || []
+
+      Enum.map(disks, fn d ->
+        name = d["name"] || "—"
+        vol = if is_binary(name) and name != "—", do: Map.get(vol_by_name, name), else: nil
+        {vkind, vref} = volume_kind_and_ref(vol)
+        gib = disk_volume_gib(vol, dvt_by_name, vm_ns, pvc_by_ns_claim)
+        {sc, ph} = pvc_meta_for_disk_volume(vol, vm_ns, pvc_info)
+
+        %{
+          namespace: vm_meta(vm, :namespace),
+          vm_name: vm_meta(vm, :name),
+          disk_name: name,
+          device_kind: disk_device_kind(d),
+          bus: disk_device_bus(d),
+          boot_order: format_cell(d["bootOrder"]),
+          removable?: vm_disk_device_removable?(d),
+          volume_kind: vkind,
+          source: vref,
+          size: format_disk_size_display(gib),
+          storage_class: sc,
+          pvc_phase: ph,
+          serial: disk_device_serial(d),
+          cache: disk_device_cache(d)
+        }
+      end)
+    end)
+  end
+
+  defp pvc_extended_info_by_ns_claim(pvcs) when is_list(pvcs) do
+    Enum.reduce(pvcs, %{}, fn p, acc ->
+      ns = get_in(p, ["metadata", "namespace"])
+      nm = get_in(p, ["metadata", "name"])
+
+      if is_binary(ns) and is_binary(nm) do
+        req =
+          get_in(p, ["spec", "resources", "requests", "storage"]) ||
+            get_in(p, ["status", "capacity", "storage"])
+
+        Map.put(acc, {ns, nm}, %{
+          storage_class: get_in(p, ["spec", "storageClassName"]) || "—",
+          phase: get_in(p, ["status", "phase"]) || "—",
+          request: req
+        })
+      else
+        acc
+      end
+    end)
+  end
+
+  defp disk_volume_gib(nil, _, _, _), do: 0.0
+
+  defp disk_volume_gib(vol, dvt_by_name, vm_ns, pvc_by_ns_claim) when is_map(vol) do
+    vm_volume_storage_gib_contribution(vol, dvt_by_name, vm_ns, pvc_by_ns_claim)
+  end
+
+  defp pvc_meta_for_disk_volume(nil, _, _), do: {"—", "—"}
+
+  defp pvc_meta_for_disk_volume(vol, vm_ns, pvc_info) when is_map(vol) do
+    key =
+      cond do
+        is_binary(get_in(vol, ["persistentVolumeClaim", "claimName"])) ->
+          claim = get_in(vol, ["persistentVolumeClaim", "claimName"])
+          ns = pvc_claim_namespace(vol, vm_ns)
+          if is_binary(ns), do: {ns, claim}, else: nil
+
+        is_binary(get_in(vol, ["dataVolume", "name"])) ->
+          dv = get_in(vol, ["dataVolume", "name"])
+          ns = if vm_ns in [nil, "", "—"], do: nil, else: vm_ns
+          if is_binary(ns), do: {ns, dv}, else: nil
+
+        true ->
+          nil
+      end
+
+    case key do
+      {ns, nm} ->
+        case Map.get(pvc_info, {ns, nm}) do
+          %{storage_class: sc, phase: ph} -> {format_cell(sc), format_cell(ph)}
+          _ -> {"—", "—"}
+        end
+
+      _ ->
+        {"—", "—"}
+    end
+  end
+
+  defp volume_kind_and_ref(nil), do: {"—", "—"}
+
+  defp volume_kind_and_ref(vol) when is_map(vol) do
+    cond do
+      is_binary(get_in(vol, ["persistentVolumeClaim", "claimName"])) ->
+        c = get_in(vol, ["persistentVolumeClaim", "claimName"])
+        ns = get_in(vol, ["persistentVolumeClaim", "namespace"])
+
+        ref =
+          if is_binary(ns) and ns != "",
+            do: "#{ns}/#{c}",
+            else: format_cell(c)
+
+        {"PVC", ref}
+
+      is_binary(get_in(vol, ["dataVolume", "name"])) ->
+        {"DataVolume", format_cell(get_in(vol, ["dataVolume", "name"]))}
+
+      is_map(vol["emptyDisk"]) ->
+        {"emptyDisk", format_cell(get_in(vol, ["emptyDisk", "capacity"]))}
+
+      is_map(vol["containerDisk"]) ->
+        {"containerDisk", format_cell(get_in(vol, ["containerDisk", "image"]))}
+
+      Map.has_key?(vol, "cloudInitNoCloud") ->
+        sn = get_in(vol, ["cloudInitNoCloud", "userDataSecretRef", "name"])
+        nd = get_in(vol, ["cloudInitNoCloud", "networkDataSecretRef", "name"])
+
+        ref =
+          [sn, nd]
+          |> Enum.filter(&is_binary/1)
+          |> Enum.uniq()
+          |> Enum.join(", ")
+
+        {"cloudInitNoCloud", if(ref == "", do: "—", else: ref)}
+
+      Map.has_key?(vol, "cloudInitConfigDrive") ->
+        {"cloudInitConfigDrive", "—"}
+
+      is_map(vol["memory"]) ->
+        {"memory", format_cell(get_in(vol, ["memory", "size"]))}
+
+      Map.has_key?(vol, "ephemeral") ->
+        {"ephemeral", "—"}
+
+      is_map(vol["secret"]) ->
+        {"secret", format_cell(get_in(vol, ["secret", "secretName"]))}
+
+      is_map(vol["configMap"]) ->
+        {"configMap", format_cell(get_in(vol, ["configMap", "name"]))}
+
+      Map.has_key?(vol, "serviceAccount") ->
+        {"serviceAccount", "—"}
+
+      Map.has_key?(vol, "sysprep") ->
+        {"sysprep", "—"}
+
+      Map.has_key?(vol, "downwardAPI") ->
+        {"downwardAPI", "—"}
+
+      true ->
+        {"other", "—"}
+    end
+  end
+
+  defp disk_device_kind(%{} = d) do
+    cond do
+      Map.has_key?(d, "disk") -> "disk"
+      Map.has_key?(d, "cdrom") -> "cdrom"
+      Map.has_key?(d, "lun") -> "lun"
+      Map.has_key?(d, "floppy") -> "floppy"
+      true -> "—"
+    end
+  end
+
+  defp disk_device_bus(%{} = d) do
+    sub = d["disk"] || d["cdrom"] || d["lun"] || d["floppy"] || %{}
+    format_cell(sub["bus"])
+  end
+
+  defp disk_device_serial(%{} = d) do
+    sub = d["disk"] || d["cdrom"] || %{}
+    format_cell(sub["serial"])
+  end
+
+  defp disk_device_cache(%{} = d) do
+    sub = d["disk"] || d["cdrom"] || %{}
+    format_cell(sub["cache"])
+  end
+
+  defp format_disk_size_display(gib) when is_float(gib) and gib > 0 do
+    format_decimal_gb_display(gib_sum_to_decimal_gb(gib)) <> " GB"
+  end
+
+  defp format_disk_size_display(_), do: "—"
+
+  defp hosts_merged_usage_map(nodes, node_metrics, prometheus_node_detail) do
+    ms = ClusterMetrics.per_node_usage_pct(List.wrap(nodes), List.wrap(node_metrics))
+    prom = prometheus_per_node_usage_for_hosts(List.wrap(nodes), prometheus_node_detail)
+
+    Enum.reduce(List.wrap(nodes), %{}, fn n, acc ->
+      name = get_in(n, ["metadata", "name"]) || ""
+
+      if name == "" do
+        acc
+      else
+        Map.put(acc, name, merge_host_usage(Map.get(ms, name), Map.get(prom, name)))
+      end
+    end)
+  end
+
+  defp merge_host_usage(ms_row, prom_row) do
+    ms_row = ms_row || %{cpu: "—", mem: "—"}
+    prom_row = prom_row || %{cpu: "—", mem: "—"}
+
+    %{
+      cpu: first_host_usage_value(ms_row[:cpu], prom_row[:cpu]),
+      mem: first_host_usage_value(ms_row[:mem], prom_row[:mem])
+    }
+  end
+
+  defp first_host_usage_value("—", b), do: normalize_host_usage_pct(b)
+  defp first_host_usage_value(nil, b), do: normalize_host_usage_pct(b)
+  defp first_host_usage_value("", b), do: normalize_host_usage_pct(b)
+  defp first_host_usage_value(a, _), do: a
+
+  defp normalize_host_usage_pct(nil), do: "—"
+  defp normalize_host_usage_pct("—"), do: "—"
+  defp normalize_host_usage_pct(s) when is_binary(s), do: s
+
+  defp prometheus_per_node_usage_for_hosts(_nodes, detail)
+       when detail == nil or detail == %{} do
+    %{}
+  end
+
+  defp prometheus_per_node_usage_for_hosts(nodes, detail) when is_map(detail) do
+    cpu_list = prometheus_instance_series(detail, :cpu_by_instance)
+    mem_list = prometheus_instance_series(detail, :mem_by_instance)
+    cpu_by = prometheus_label_to_pct_map(cpu_list)
+    mem_by = prometheus_label_to_pct_map(mem_list)
+
+    Enum.reduce(List.wrap(nodes), %{}, fn n, acc ->
+      name = get_in(n, ["metadata", "name"]) || ""
+
+      if name == "" do
+        acc
+      else
+        labels = node_prometheus_match_labels(n)
+
+        Map.put(acc, name, %{
+          cpu: first_prometheus_host_pct(cpu_by, labels),
+          mem: first_prometheus_host_pct(mem_by, labels)
+        })
+      end
+    end)
+  end
+
+  defp prometheus_instance_series(detail, key) do
+    List.wrap(Map.get(detail, key) || Map.get(detail, Atom.to_string(key)))
+  end
+
+  defp prometheus_label_to_pct_map(entries) do
+    Enum.reduce(entries, %{}, fn e, acc ->
+      {l, v} = prometheus_entry_label_value(e)
+
+      if is_binary(l) and l != "" and is_float(v) do
+        Map.put(acc, l, format_host_prometheus_pct(v))
+      else
+        acc
+      end
+    end)
+  end
+
+  defp prometheus_entry_label_value(e) when is_map(e) do
+    l = e[:label] || e["label"]
+    v = e[:value] || e["value"]
+    v = if is_float(v), do: v, else: if(is_number(v), do: v * 1.0, else: nil)
+    {l, v}
+  end
+
+  defp format_host_prometheus_pct(f) when is_float(f) do
+    "#{min(100, max(0, round(f)))}%"
+  end
+
+  defp first_prometheus_host_pct(by_label, candidates) do
+    Enum.find_value(candidates, fn c -> Map.get(by_label, c) end) || "—"
+  end
+
+  defp node_prometheus_match_labels(node) do
+    name = get_in(node, ["metadata", "name"]) || ""
+    addrs = get_in(node, ["status", "addresses"]) || []
+
+    ips =
+      for %{"type" => t, "address" => a} <- addrs,
+          t in ["InternalIP", "ExternalIP"],
+          is_binary(a),
+          String.trim(a) != "",
+          do: String.trim(a)
+
+    hosts =
+      for %{"type" => "Hostname", "address" => a} <- addrs,
+          is_binary(a),
+          String.trim(a) != "",
+          do: String.trim(a)
+
+    short_hosts =
+      Enum.flat_map(hosts, fn h ->
+        case String.split(h, ".", parts: 2) do
+          [short, _] when short != "" -> [h, short]
+          _ -> [h]
+        end
+      end)
+
+    [name | ips ++ short_hosts]
+    |> Enum.uniq()
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp hosts_table_rows(nodes, vmis, merged_usage) do
+    n_list = nodes |> List.wrap() |> Enum.sort_by(&host_node_sort_name/1, :asc)
+    vmi_counts = vmi_count_by_k8s_node(vmis)
+    Enum.map(n_list, &hosts_row_from_node(&1, vmi_counts, merged_usage))
+  end
+
+  defp host_node_sort_name(n), do: get_in(n, ["metadata", "name"]) || ""
+
+  defp vmi_count_by_k8s_node(vmis) do
+    Enum.reduce(List.wrap(vmis), %{}, fn vmi, acc ->
+      case get_in(vmi, ["status", "nodeName"]) do
+        n when is_binary(n) and n != "" -> Map.update(acc, n, 1, &(&1 + 1))
+        _ -> acc
+      end
+    end)
+  end
+
+  defp hosts_row_from_node(node, vmi_counts, usage_map) do
+    name = get_in(node, ["metadata", "name"]) || "—"
+    ni = get_in(node, ["status", "nodeInfo"]) || %{}
+    ready = node_ready?(node)
+    pct = Map.get(usage_map, name, %{cpu: "—", mem: "—"})
+
+    os = format_cell(ni["operatingSystem"])
+    arch = format_cell(ni["architecture"])
+
+    os_arch =
+      cond do
+        os != "—" and arch != "—" -> "#{os} / #{arch}"
+        os != "—" -> os
+        arch != "—" -> arch
+        true -> "—"
+      end
+
+    rt = ni["containerRuntimeVersion"]
+
+    runtime =
+      if is_binary(rt) and rt != "" do
+        String.slice(rt, 0, 72)
+      else
+        "—"
+      end
+
+    %{
+      name: name,
+      is_ready: ready,
+      scheduling: host_scheduling_state(node),
+      scheduling_hint: host_scheduling_hint(node),
+      role: host_role_label(node),
+      vmi_count: Map.get(vmi_counts, name, 0),
+      cpu_pct: pct[:cpu] || "—",
+      mem_pct: pct[:mem] || "—",
+      internal_ip: node_address(node, "InternalIP"),
+      external_ip: node_address(node, "ExternalIP"),
+      cpu_alloc: format_cell(get_in(node, ["status", "allocatable", "cpu"])),
+      mem_alloc: format_cell(get_in(node, ["status", "allocatable", "memory"])),
+      pods_alloc: format_cell(get_in(node, ["status", "allocatable", "pods"])),
+      kubelet: format_cell(ni["kubeletVersion"]),
+      os_arch: os_arch,
+      runtime: runtime
+    }
+  end
+
+  defp host_scheduling_state(node) do
+    cond do
+      not node_ready?(node) -> "Not ready"
+      node_cordoned?(node) -> "Cordoned"
+      true -> "Schedulable"
+    end
+  end
+
+  defp host_scheduling_hint(node) do
+    if node_ready?(node) do
+      nil
+    else
+      conditions = get_in(node, ["status", "conditions"]) || []
+
+      case Enum.find(conditions, &(&1["type"] == "Ready")) do
+        %{"message" => m} when is_binary(m) ->
+          t = String.trim(m)
+          if t != "", do: String.slice(t, 0, 240), else: nil
+
+        %{"reason" => r} when is_binary(r) ->
+          r
+
+        _ ->
+          nil
+      end
+    end
+  end
+
+  defp host_role_label(node) do
+    labels = get_in(node, ["metadata", "labels"]) || %{}
+
+    cond do
+      Map.has_key?(labels, "node-role.kubernetes.io/control-plane") -> "control-plane"
+      Map.has_key?(labels, "node-role.kubernetes.io/master") -> "control-plane"
+      true -> "worker"
+    end
+  end
+
+  defp node_address(node, type) when is_binary(type) do
+    addrs = get_in(node, ["status", "addresses"]) || []
+
+    case Enum.find(addrs, &(&1["type"] == type)) do
+      %{"address" => a} when is_binary(a) and a != "" -> a
+      _ -> "—"
+    end
+  end
 
   defp format_cell(nil), do: "—"
   defp format_cell(""), do: "—"

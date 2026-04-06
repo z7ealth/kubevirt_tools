@@ -4,6 +4,11 @@ defmodule KubevirtTools.PrometheusMetricsServer do
   `prometheus:metrics`. LiveViews subscribe to refresh Prometheus-driven tiles and charts
   without reloading the full Kubernetes snapshot.
 
+  Full snapshots run every `:prometheus_poll_interval_ms` (heavy: PromQL + node detail).
+  After a successful snapshot, lightweight `/-/healthy` checks run every
+  `:prometheus_health_interval_ms` so the dashboard can drop "Connected" quickly if Prometheus
+  stops responding.
+
   Timers are tracked so `poll_now/0` can run an immediate fetch (e.g. after Prometheus
   starts) without overlapping with the regular interval.
   """
@@ -33,16 +38,41 @@ defmodule KubevirtTools.PrometheusMetricsServer do
 
   @impl true
   def init(_opts) do
-    state = %{last: nil, timer_ref: nil}
-    {:ok, schedule_next_poll(state, 0)}
+    state = %{last: nil, poll_timer_ref: nil, health_timer_ref: nil}
+    {:ok, schedule_poll(state, 0)}
   end
 
   @impl true
   def handle_info(:poll, state) do
-    state = cancel_timer(state)
+    state = cancel_poll_timer(state)
+    state = cancel_health_timer(state)
     last = poll_and_broadcast()
     state = %{state | last: last}
-    {:noreply, schedule_next_poll(state, poll_interval_ms())}
+    state = schedule_poll(state, poll_interval_ms())
+    state = maybe_schedule_health_after_full_ok(state, last)
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info(:health_check, state) do
+    state = cancel_health_timer(state)
+
+    case KubevirtTools.PrometheusClient.health_ping() do
+      :ok ->
+        state =
+          if match?({:ok, _}, state.last) do
+            schedule_health(state, health_interval_ms())
+          else
+            state
+          end
+
+        {:noreply, state}
+
+      {:error, reason} ->
+        msg = {:error, reason}
+        Phoenix.PubSub.broadcast(KubevirtTools.PubSub, @topic, {:prometheus_metrics, msg})
+        {:noreply, %{state | last: msg}}
+    end
   end
 
   @impl true
@@ -52,10 +82,12 @@ defmodule KubevirtTools.PrometheusMetricsServer do
 
   @impl true
   def handle_call(:poll_now, _from, state) do
-    state = cancel_timer(state)
+    state = cancel_poll_timer(state)
+    state = cancel_health_timer(state)
     last = poll_and_broadcast()
     state = %{state | last: last}
-    state = schedule_next_poll(state, poll_interval_ms())
+    state = schedule_poll(state, poll_interval_ms())
+    state = maybe_schedule_health_after_full_ok(state, last)
     {:reply, last, state}
   end
 
@@ -79,20 +111,42 @@ defmodule KubevirtTools.PrometheusMetricsServer do
     end
   end
 
-  defp cancel_timer(%{timer_ref: nil} = state), do: state
+  defp maybe_schedule_health_after_full_ok(state, {:ok, _}),
+    do: schedule_health(state, health_interval_ms())
 
-  defp cancel_timer(%{timer_ref: ref} = state) do
+  defp maybe_schedule_health_after_full_ok(state, _), do: state
+
+  defp cancel_poll_timer(%{poll_timer_ref: nil} = state), do: state
+
+  defp cancel_poll_timer(%{poll_timer_ref: ref} = state) do
     _ = Process.cancel_timer(ref)
-    %{state | timer_ref: nil}
+    %{state | poll_timer_ref: nil}
   end
 
-  defp schedule_next_poll(state, ms) when is_integer(ms) do
-    state = cancel_timer(state)
+  defp cancel_health_timer(%{health_timer_ref: nil} = state), do: state
+
+  defp cancel_health_timer(%{health_timer_ref: ref} = state) do
+    _ = Process.cancel_timer(ref)
+    %{state | health_timer_ref: nil}
+  end
+
+  defp schedule_poll(state, ms) when is_integer(ms) do
+    state = cancel_poll_timer(state)
     ref = Process.send_after(self(), :poll, ms)
-    %{state | timer_ref: ref}
+    %{state | poll_timer_ref: ref}
+  end
+
+  defp schedule_health(state, ms) when is_integer(ms) do
+    state = cancel_health_timer(state)
+    ref = Process.send_after(self(), :health_check, ms)
+    %{state | health_timer_ref: ref}
   end
 
   defp poll_interval_ms do
     Application.get_env(:kubevirt_tools, :prometheus_poll_interval_ms, 300_000)
+  end
+
+  defp health_interval_ms do
+    Application.get_env(:kubevirt_tools, :prometheus_health_interval_ms, 60_000)
   end
 end

@@ -17,8 +17,12 @@ config :kubevirt_tools, :kubeconfig_connect_timeout_ms, 12_000
 # Instant-query timeout when calling the Prometheus HTTP API from the dashboard.
 config :kubevirt_tools, :prometheus_client_timeout_ms, 5_000
 
-# How often `PrometheusMetricsServer` polls Prometheus and pushes updates to LiveViews (5 minutes).
+# How often `PrometheusMetricsServer` runs a full Prometheus snapshot (charts, node metrics, etc.).
 config :kubevirt_tools, :prometheus_poll_interval_ms, 300_000
+
+# When the last snapshot succeeded, lightweight `/-/healthy` checks this often so the UI flips off
+# "Connected" quickly if Prometheus goes away (full snapshot stays on the interval above).
+config :kubevirt_tools, :prometheus_health_interval_ms, 60_000
 
 # Configure the endpoint
 config :kubevirt_tools, KubevirtToolsWeb.Endpoint,

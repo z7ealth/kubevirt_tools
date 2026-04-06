@@ -22,6 +22,28 @@ defmodule KubevirtTools.PrometheusClient do
   """
 
   @doc """
+  Minimal HTTP check against Prometheus `/-/healthy` (no PromQL). Used between full snapshots
+  to refresh connectivity status without re-querying node metrics.
+  """
+  @spec health_ping() :: :ok | {:error, String.t()}
+  def health_ping do
+    base = PrometheusSetup.base_url() |> String.trim_trailing("/")
+    timeout = Application.get_env(:kubevirt_tools, :prometheus_client_timeout_ms, 5_000)
+    url = base <> "/-/healthy"
+
+    case Req.get(url, receive_timeout: timeout) do
+      {:ok, %{status: 200}} ->
+        :ok
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, "Prometheus health check HTTP #{status}: #{inspect(body)}"}
+
+      {:error, reason} ->
+        {:error, format_error(reason)}
+    end
+  end
+
+  @doc """
   Queries the configured Prometheus HTTP API (`PROMETHEUS_URL`, default `http://localhost:9090`).
 
   Returns `sum(up)`, optional `prometheus_build_info` version, and **node_detail** when
@@ -64,11 +86,18 @@ defmodule KubevirtTools.PrometheusClient do
       memory_cluster_pct(base, @mem_util_memavailable, timeout) ||
         memory_cluster_pct(base, @mem_util_memfree, timeout)
 
+    mem_by_instance =
+      case query_vector_entries(base, @mem_util_memavailable, timeout) do
+        [] -> query_vector_entries(base, @mem_util_memfree, timeout)
+        xs -> xs
+      end
+
     %{
       cpu_cluster_pct: cpu_cluster_pct,
       mem_cluster_pct: mem_pct,
       load_buckets: load_buckets,
-      cpu_by_instance: cpu_entries
+      cpu_by_instance: cpu_entries,
+      mem_by_instance: mem_by_instance
     }
   end
 

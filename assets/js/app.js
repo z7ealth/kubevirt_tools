@@ -33,9 +33,23 @@ const liveSocket = new LiveSocket("/live", Socket, {
   hooks: {...colocatedHooks, VmTopology: VmTopologyHook},
 })
 
-// Show progress bar on live navigation and form submits
-topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
-window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
+// Show progress bar on live navigation and form submits (match DaisyUI --color-primary)
+function syncTopbarFromTheme() {
+  let primary = getComputedStyle(document.documentElement)
+    .getPropertyValue("--color-primary")
+    .trim()
+  if (!primary) primary = "oklch(52% 0.089 201)"
+  topbar.config({
+    barColors: {0: primary, 1: primary},
+    shadowColor: "rgba(0, 0, 0, 0.25)",
+  })
+}
+
+syncTopbarFromTheme()
+window.addEventListener("phx:page-loading-start", _info => {
+  syncTopbarFromTheme()
+  topbar.show(300)
+})
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
 // connect if there are any LiveViews on the page
