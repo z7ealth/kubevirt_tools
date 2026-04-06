@@ -49,6 +49,12 @@ mix phx.server
 
 Open [http://localhost:4000](http://localhost:4000) and upload a valid kubeconfig.
 
+## Testing
+
+This app has been tested on a KubeVirt cluster and works as expected in that environment.
+
+It may also work on OpenShift Virtualization, but this has not been tested yet.
+
 ---
 
 ## Configuration
