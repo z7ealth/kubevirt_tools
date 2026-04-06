@@ -1,3 +1,11 @@
+<p align="center">
+  <img
+    src="priv/static/images/kubevirt_tools_logo_no_bg.png"
+    alt="KubeVirt Tools"
+    width="320"
+  />
+</p>
+
 # KubeVirt Tools
 
 Phoenix web app for **cluster-wide KubeVirt and Kubernetes visibility**: sign in with a kubeconfig, then explore a LiveView dashboard backed by a one-shot API snapshot (refresh on demand).
