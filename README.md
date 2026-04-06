@@ -55,6 +55,34 @@ This app has been tested on a KubeVirt cluster and works as expected in that env
 
 It may also work on OpenShift Virtualization, but this has not been tested yet.
 
+## Work in progress (WIP)
+
+**Kubernetes deployment** — There is no supported recipe yet for running this app *inside* a cluster (container image, Deployment/Service/Ingress, secrets for `SECRET_KEY_BASE`, and so on). That is planned; check back later for manifests and documentation.
+
+## Build
+
+To produce a **production OTP release** (self-contained under `_build/prod/rel/kubevirt_tools/`), from the repository root:
+
+```bash
+MIX_ENV=prod mix deps.get --only prod
+MIX_ENV=prod mix assets.deploy
+MIX_ENV=prod mix release --overwrite
+```
+
+Omit `--overwrite` on the first build; use it when rebuilding so `mix release` does not stop at an interactive prompt.
+
+Set runtime environment variables as in **Configuration** (notably `SECRET_KEY_BASE` in `:prod`). Start the release with the HTTP server enabled:
+
+```bash
+cd _build/prod/rel/kubevirt_tools
+export SECRET_KEY_BASE="…"   # e.g. output of mix phx.gen.secret
+export PHX_HOST=example.com  # public hostname for URL generation
+export PORT=4000
+PHX_SERVER=true bin/kubevirt_tools start
+```
+
+The release must be built on an OS **compatible with** the machine where you run it (same distribution family / libc expectations as a typical Elixir release). For more context, see the [Phoenix deployment guide](https://hexdocs.pm/phoenix/deployment.html).
+
 ---
 
 ## Configuration
