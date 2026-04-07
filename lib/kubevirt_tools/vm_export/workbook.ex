@@ -3,6 +3,10 @@ defmodule KubevirtTools.VmExport.Workbook do
 
   alias KubevirtTools.VmExport
 
+  # App primary (KubeVirt teal — assets/css/app.css / daisyUI theme; kubevirt.io #00797f).
+  @export_header_bg "#00797f"
+  @export_header_fg "#ffffff"
+
   @virtual_machine_export_headers [
     "VM",
     "Memory limit",
@@ -99,20 +103,20 @@ defmodule KubevirtTools.VmExport.Workbook do
     running_vmis = Enum.count(vmis, &(get_in(&1, ["status", "phase"]) == "Running"))
 
     [
-      ["KUBEVIRT TOOLS EXPORT SUMMARY", ""],
+      section_header_row("KUBEVIRT TOOLS EXPORT SUMMARY"),
       ["", ""],
       ["Generated", format_local(gen)],
       ["Cluster", meta.cluster_name],
       ["KubeVirt Tools Version", meta.app_version],
       ["", ""],
-      ["COMPUTE", ""],
+      section_header_row("COMPUTE"),
       ["Total Nodes", to_string(length(nodes))],
       ["Ready Nodes", to_string(ready)],
       ["Not Ready Nodes", to_string(not_ready)],
       ["Total CPUs", "#{total_cpu} cores"],
       ["Total Memory", total_mem],
       ["", ""],
-      ["KUBEVIRT", ""],
+      section_header_row("KUBEVIRT"),
       ["Total VirtualMachines", to_string(length(vms))],
       ["Running VMIs", to_string(running_vmis)]
     ]
@@ -127,7 +131,7 @@ defmodule KubevirtTools.VmExport.Workbook do
     kver = first_node_kubelet_version(nodes)
 
     [
-      ["CLUSTER", ""],
+      section_header_row("CLUSTER"),
       ["Cluster Name", meta.cluster_name],
       ["API Server", meta.api_url],
       ["Kubernetes Version (node kubelet sample)", kver],
@@ -136,7 +140,7 @@ defmodule KubevirtTools.VmExport.Workbook do
       ["KubeVirt Version", ""],
       ["CDI Version", ""],
       ["", ""],
-      ["NODES", ""],
+      section_header_row("NODES"),
       ["Total Nodes", to_string(length(nodes))],
       ["Ready Nodes", to_string(ready)],
       ["Control Plane Nodes", to_string(cp)],
@@ -147,7 +151,7 @@ defmodule KubevirtTools.VmExport.Workbook do
 
   def virtual_machines_sheet(bundle) do
     {h, r} = virtual_machine_inventory_rows(bundle)
-    [h | r]
+    [header_row(h) | r]
   end
 
   def nodes_sheet(bundle) do
@@ -211,7 +215,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         ]
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def memory_sheet(bundle) do
@@ -261,7 +265,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         ]
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def guest_agent_sheet(bundle) do
@@ -309,7 +313,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         ]
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def snapshots_sheet(bundle) do
@@ -346,7 +350,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         ]
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def vm_conditions_sheet(bundle) do
@@ -369,7 +373,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         end)
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def disks_sheet(bundle) do
@@ -430,7 +434,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         end)
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def networks_sheet(bundle) do
@@ -481,7 +485,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         end)
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def cpu_sheet(bundle) do
@@ -535,7 +539,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         ]
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def storage_classes_sheet(bundle) do
@@ -591,7 +595,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         ]
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def pvcs_sheet(bundle) do
@@ -632,7 +636,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         ]
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def resource_quotas_sheet(bundle) do
@@ -668,7 +672,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         end
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def limit_ranges_sheet(bundle) do
@@ -725,7 +729,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         end
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   defp limit_cell(nil), do: ""
@@ -769,7 +773,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         ]
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def migrations_sheet(bundle) do
@@ -806,7 +810,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         ]
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def data_volumes_sheet(bundle) do
@@ -842,7 +846,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         ]
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
 
   def cluster_preferences_sheet(bundle) do
@@ -875,8 +879,15 @@ defmodule KubevirtTools.VmExport.Workbook do
         ]
       end)
 
-    [hdr | rows]
+    [header_row(hdr) | rows]
   end
+
+  defp header_cell(value),
+    do: [value, bg_color: @export_header_bg, color: @export_header_fg, bold: true]
+
+  defp header_row(cells) when is_list(cells), do: Enum.map(cells, &header_cell/1)
+
+  defp section_header_row(title) when is_binary(title), do: [header_cell(title), ""]
 
   # --- VirtualMachines sheet row (CSV uses the same columns) ---
 
