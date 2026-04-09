@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: phoenix-app
+  name: kubevirt-tools-app
   namespace: kubevirt-tools
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: phoenix-app
+      app: kubevirt-tools-app
   template:
     metadata:
       labels:
-        app: phoenix-app
+        app: kubevirt-tools-app
     spec:
       containers:
-        - name: phoenix
+        - name: kubevirt-tools
           image: hsduiii/kubevirt_tools:nightly
           imagePullPolicy: Always
           ports:
             - containerPort: 4000
           envFrom:
             - secretRef:
-                name: phoenix-env
+                name: kubevirt-tools-secret
