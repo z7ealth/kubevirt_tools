@@ -11,9 +11,13 @@ defmodule KubevirtTools.K8sConn do
   """
   @spec from_kubeconfig_string(String.t()) :: {:ok, K8s.Conn.t()} | {:error, term()}
   def from_kubeconfig_string(yaml) when is_binary(yaml) do
-    case K8s.Conn.from_string(yaml) do
-      {:ok, conn} -> {:ok, put_read_only_middleware(conn)}
-      {:error, _} = err -> err
+    case K8s.Conn.from_service_account(insecure_skip_tls_verify: true) do
+      {:ok, conn} -> 
+        dbg(conn)
+        {:ok, put_read_only_middleware(conn)}
+      {:error, _} = err -> 
+        dbg(err)
+        err
     end
   end
 
