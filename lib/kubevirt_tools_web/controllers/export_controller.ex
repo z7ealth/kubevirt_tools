@@ -89,8 +89,8 @@ defmodule KubevirtToolsWeb.ExportController do
   end
 
   defp load_export_bundle(token) do
-    with {:ok, yaml} <- KubeconfigStore.get(token),
-         {:ok, k8s} <- K8sConn.from_kubeconfig_string(yaml),
+    with {:ok, entry} <- KubeconfigStore.get(token),
+         {:ok, k8s} <- K8sConn.from_session_entry(entry),
          {:ok, bundle} <- Bundle.fetch(k8s) do
       cluster = Map.get(bundle.meta, :cluster_name) || ""
       {:ok, bundle, ExportFilename.stem(cluster)}

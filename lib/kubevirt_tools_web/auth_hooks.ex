@@ -36,7 +36,7 @@ defmodule KubevirtToolsWeb.AuthHooks do
 
     if is_binary(token) && SessionToken.valid_format?(token) &&
          match?({:ok, _}, KubeconfigStore.get(token)) do
-      {:halt, redirect(socket, to: ~p"/dashboard")}
+      {:halt, redirect(socket, to: ~p"/welcome")}
     else
       {:cont, socket}
     end

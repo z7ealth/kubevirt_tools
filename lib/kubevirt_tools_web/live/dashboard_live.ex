@@ -1495,8 +1495,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
   end
 
   defp load_kubevirt(token) do
-    with {:ok, yaml} <- KubeconfigStore.get(token),
-         {:ok, conn} <- K8sConn.from_kubeconfig_string(yaml) do
+    with {:ok, entry} <- KubeconfigStore.get(token),
+         {:ok, conn} <- K8sConn.from_session_entry(entry) do
       {vms, vm_err} = safe_list(&KubeVirt.list_virtual_machines/1, conn)
       {vmis, vmi_err} = safe_list(&KubeVirt.list_virtual_machine_instances/1, conn)
       {nodes, node_err} = safe_list(&ClusterInventory.list_nodes/1, conn)

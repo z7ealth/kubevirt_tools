@@ -1,0 +1,51 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubevirt-tools-read
+rules:
+  # API discovery (KubeconfigVerify.verify_api_reachable → K8s.Discovery.versions/1)
+  - nonResourceURLs:
+      - /api
+      - /api/*
+      - /apis
+      - /apis/*
+    verbs:
+      - get
+  - nonResourceURLs:
+      - /version
+    verbs:
+      - get
+  # Core
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims, resourcequotas, limitranges, events]
+    verbs: [get, list]
+  - apiGroups: ["events.k8s.io"]
+    resources: [events]
+    verbs: [get, list]
+  - apiGroups: ["storage.k8s.io"]
+    resources: [storageclasses]
+    verbs: [get, list]
+  # metrics-server (ClusterMetrics.list_node_metrics/1 — resource name is "nodes")
+  - apiGroups: ["metrics.k8s.io"]
+    resources: [nodes]
+    verbs: [get, list]
+  # KubeVirt
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachines
+      - virtualmachineinstances
+      - kubevirts
+      - virtualmachineinstancemigrations
+    verbs: [get, list]
+  - apiGroups: ["snapshot.kubevirt.io"]
+    resources: [virtualmachinesnapshots]
+    verbs: [get, list]
+  - apiGroups: ["cdi.kubevirt.io"]
+    resources: [datavolumes]
+    verbs: [get, list]
+  - apiGroups: ["instancetype.kubevirt.io"]
+    resources: [virtualmachineclusterpreferences]
+    verbs: [get, list]

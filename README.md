@@ -40,6 +40,8 @@ KubeVirt Tools is not affiliated with those projects; it is an independent Phoen
 
 ## Quick start
 
+### Run locally (development)
+
 ```bash
 git clone https://github.com/z7ealth/kubevirt_tools.git
 cd kubevirt_tools
@@ -49,6 +51,34 @@ mix phx.server
 
 Open [http://localhost:4000](http://localhost:4000) and upload a valid kubeconfig.
 
+### Deploy on Kubernetes / OpenShift
+
+From a clone of the repository:
+
+1. **Create the namespace** (skip if it already exists):
+
+   ```bash
+   kubectl create namespace kubevirt-tools
+   ```
+
+   On OpenShift you can use `oc new-project kubevirt-tools` instead.
+
+2. **Configure secrets** — edit `deploy/k8s/secret.yaml` and set `SECRET_KEY_BASE` (e.g. `mix phx.gen.secret`), `PHX_HOST`, and any optional values such as `PROMETHEUS_URL`.
+
+3. **Apply the manifests** (from the repo root):
+
+   ```bash
+   kubectl apply -f deploy/k8s/
+   ```
+
+   With the OpenShift CLI:
+
+   ```bash
+   oc apply -f deploy/k8s/
+   ```
+
+   **`deploy/k8s/route.yaml` is OpenShift-only** (`route.openshift.io`). On a plain Kubernetes cluster, skip that file and expose the app with an **Ingress** (or another controller) targeting the `kubevirt-tools-service` Service yourself.
+
 ## Testing
 
 This app has been tested on a KubeVirt cluster and works as expected in that environment.
@@ -57,7 +87,7 @@ It may also work on OpenShift Virtualization, but this has not been tested yet.
 
 ## Work in progress (WIP)
 
-**Kubernetes deployment** — There is no supported recipe yet for running this app *inside* a cluster (container image, Deployment/Service/Ingress, secrets for `SECRET_KEY_BASE`, and so on). That is planned; check back later for manifests and documentation.
+**Kubernetes deployment** — Sample manifests live under `deploy/k8s/` (Deployment, Service, RBAC, Secret template). A generic **Ingress** manifest is not included; use the **Route** only on OpenShift (see **Deploy on Kubernetes / OpenShift** above).
 
 ## Build
 

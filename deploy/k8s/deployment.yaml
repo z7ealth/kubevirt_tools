@@ -13,9 +13,10 @@ spec:
       labels:
         app: kubevirt-tools-app
     spec:
+      serviceAccountName: kubevirt-tools-sa
       containers:
         - name: kubevirt-tools
-          image: hsduiii/kubevirt_tools:nightly
+          image: hsduiii/kubevirt_tools:v0.1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 4000

@@ -43,5 +43,11 @@ defmodule KubevirtTools.K8sReadOnlyTest do
       assert {:ok, conn} = K8sConn.from_kubeconfig_string(yaml)
       assert hd(conn.middleware.request) == K8sReadOnlyMiddleware
     end
+
+    test "from_session_entry accepts kubeconfig tuple" do
+      yaml = File.read!(@fixture)
+      assert {:ok, conn} = K8sConn.from_session_entry({:kubeconfig, yaml})
+      assert hd(conn.middleware.request) == K8sReadOnlyMiddleware
+    end
   end
 end
