@@ -53,9 +53,14 @@ Open [http://localhost:4000](http://localhost:4000) and upload a valid kubeconfi
 
 ### Deploy on Kubernetes / OpenShift
 
-From a clone of the repository:
+1. **Clone the repository** and enter the directory:
 
-1. **Create the namespace** (skip if it already exists):
+   ```bash
+   git clone https://github.com/z7ealth/kubevirt_tools
+   cd kubevirt_tools
+   ```
+
+2. **Create the namespace** (skip if it already exists):
 
    ```bash
    kubectl create namespace kubevirt-tools
@@ -63,9 +68,9 @@ From a clone of the repository:
 
    On OpenShift you can use `oc new-project kubevirt-tools` instead.
 
-2. **Configure secrets** — edit `deploy/k8s/secret.yaml` and set `SECRET_KEY_BASE` (e.g. `mix phx.gen.secret`), `PHX_HOST`, and any optional values such as `PROMETHEUS_URL`.
+3. **Configure secrets** — edit `deploy/k8s/secret.yaml` and set `SECRET_KEY_BASE` (e.g. `mix phx.gen.secret`), `PHX_HOST`, and any optional values such as `PROMETHEUS_URL`.
 
-3. **Apply the manifests** (from the repo root):
+4. **Apply the manifests** (from the repo root):
 
    ```bash
    kubectl apply -f deploy/k8s/
