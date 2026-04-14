@@ -84,6 +84,18 @@ Open [http://localhost:4000](http://localhost:4000) and upload a valid kubeconfi
 
    **`deploy/k8s/route.yaml` is OpenShift-only** (`route.openshift.io`). On a plain Kubernetes cluster, skip that file and expose the app with an **Ingress** (or another controller) targeting the `kubevirt-tools-service` Service yourself.
 
+### Quick expose (port-forward)
+
+Without a Route or Ingress, you can reach the app by forwarding the Service port (Service port **80** maps to the container’s **4000**):
+
+```bash
+kubectl port-forward -n kubevirt-tools svc/kubevirt-tools-service 4000:80
+```
+
+With the OpenShift CLI: `oc port-forward -n kubevirt-tools svc/kubevirt-tools-service 4000:80`.
+
+Then open [http://localhost:4000](http://localhost:4000). Leave the command running while you use the UI.
+
 ## Testing
 
 This app has been tested on a KubeVirt cluster and works as expected in that environment.
