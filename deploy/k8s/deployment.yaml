@@ -16,7 +16,7 @@ spec:
       serviceAccountName: kubevirt-tools-sa
       containers:
         - name: kubevirt-tools
-          image: hsduiii/kubevirt_tools:v0.1.0
+          image: hsduiii/kubevirt_tools:nightly
           imagePullPolicy: Always
           ports:
             - containerPort: 4000

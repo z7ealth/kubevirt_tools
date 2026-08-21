@@ -2,19 +2,19 @@ defmodule KubevirtTools.InClusterAuth do
   @moduledoc false
 
   @default_sa_path "/var/run/secrets/kubernetes.io/serviceaccount"
-  @expected_namespace "kubevirt-tools"
   @expected_service_account "kubevirt-tools-sa"
 
   @doc """
   True when the pod is in-cluster and the mounted credentials match the expected
-  namespace (`kubevirt-tools`) and service account name (`kubevirt-tools-sa`).
+  service account name (`kubevirt-tools-sa`), regardless of namespace — the app
+  can be installed into any namespace (see `deploy/k8s/install.sh -n`), only the
+  service account name is fixed across namespaces.
   Does not call the API — use before establishing a session.
   """
   @spec expected_identity?() :: boolean()
   def expected_identity? do
     with true <- in_cluster?(),
-         {:ok, ns} <- read_namespace(),
-         true <- ns == @expected_namespace,
+         {:ok, _ns} <- read_namespace(),
          {:ok, account} <- read_service_account_from_token(),
          true <- account == @expected_service_account do
       true

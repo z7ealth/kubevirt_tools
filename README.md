@@ -92,6 +92,12 @@ With the OpenShift CLI: `oc port-forward -n kubevirt-tools svc/kubevirt-tools-se
 
 Then open [http://localhost:4000](http://localhost:4000). Leave the command running while you use the UI.
 
+### Signing in
+
+When deployed with `deploy/k8s/install.sh` (or the manifests directly), the app auto-detects its own mounted `kubevirt-tools-sa` service account and signs you straight into the dashboard — no kubeconfig upload needed. This works regardless of which namespace you installed into (`install.sh -n NAMESPACE`); only the service account **name** has to match, not the namespace.
+
+If that service account isn't found or usable (running outside a cluster, RBAC not applied, a different service account name, etc.), the app falls back silently to the kubeconfig upload form — no error is shown, you just sign in with an uploaded kubeconfig instead.
+
 ## Testing
 
 This app has been tested on a KubeVirt cluster and works as expected in that environment.
