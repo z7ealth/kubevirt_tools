@@ -1,12 +1,14 @@
 # OpenShift-only (route.openshift.io is the other OpenShift-only manifest —
-# install.sh applies both only when it detects an OpenShift cluster).
+# install.sh applies both automatically when it detects an OpenShift cluster;
+# pass --no-openshift-monitoring to skip just this one).
 #
 # Grants the app's service account read access to OpenShift's built-in
 # cluster-monitoring Prometheus (prometheus-k8s.openshift-monitoring.svc),
 # via the "cluster-monitoring-view" ClusterRole that ships with OpenShift
-# itself (not defined by this app). Needed only if you point PROMETHEUS_URL
-# at that in-cluster Prometheus instead of a separate one — see "VM CPU/memory
-# history charts" in the README.
+# itself (not defined by this app). Only actually used if you also point
+# PROMETHEUS_URL at that in-cluster Prometheus — see "VM CPU/memory history
+# charts" in the README. Harmless to leave applied if you don't (unused
+# permission grant).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:

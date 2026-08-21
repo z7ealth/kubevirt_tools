@@ -161,7 +161,7 @@ defmodule KubevirtTools.PrometheusClient do
 
   defp range_points_from_results([%{"values" => values} | _]) when is_list(values) do
     for [ts, v] <- values, f = parse_number(v), not is_nil(f) do
-      {round(ts * 1000), f}
+      {round(ts * 1000), Float.round(f, 1)}
     end
   end
 

@@ -2,7 +2,7 @@
 # Installs KubeVirt Tools into a Kubernetes (or OpenShift) cluster.
 #
 # Usage:
-#   ./install.sh [-n NAMESPACE] [--openshift|--kubernetes] [--openshift-monitoring]
+#   ./install.sh [-n NAMESPACE] [--openshift|--kubernetes] [--no-openshift-monitoring]
 #
 # Requires: kubectl (or oc) pointed at the target cluster/context.
 set -euo pipefail
@@ -10,21 +10,22 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NAMESPACE="kubevirt-tools"
 FORCE_MODE=""
-ENABLE_OPENSHIFT_MONITORING=""
+SKIP_OPENSHIFT_MONITORING=""
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [-n NAMESPACE] [--openshift|--kubernetes] [--openshift-monitoring]
+Usage: $(basename "$0") [-n NAMESPACE] [--openshift|--kubernetes] [--no-openshift-monitoring]
 
   -n, --namespace NAME     Namespace to install into (default: kubevirt-tools)
-      --openshift          Force-apply the OpenShift Route
-      --kubernetes         Skip the OpenShift Route
-      --openshift-monitoring
-                           Also grant read access to OpenShift's built-in
-                           cluster-monitoring Prometheus (cluster-monitoring-view),
-                           so PROMETHEUS_URL can point at it for the VM history
-                           charts. Opt-in: grants extra cluster-wide read access,
-                           so it's not applied by default even on OpenShift.
+      --openshift          Force-apply OpenShift-only manifests (Route, monitoring RBAC)
+      --kubernetes         Skip OpenShift-only manifests (Route, monitoring RBAC)
+      --no-openshift-monitoring
+                           On an OpenShift cluster, skip granting read access to
+                           the built-in cluster-monitoring Prometheus
+                           (cluster-monitoring-view) — applied automatically
+                           otherwise, alongside the Route. Only matters if you
+                           plan to set PROMETHEUS_URL to that in-cluster
+                           Prometheus; harmless to leave enabled if you don't.
   -h, --help               Show this help
 EOF
 }
@@ -43,8 +44,8 @@ while [ $# -gt 0 ]; do
       FORCE_MODE="kubernetes"
       shift
       ;;
-    --openshift-monitoring)
-      ENABLE_OPENSHIFT_MONITORING="yes"
+    --no-openshift-monitoring)
+      SKIP_OPENSHIFT_MONITORING="yes"
       shift
       ;;
     -h|--help)
@@ -96,16 +97,15 @@ apply service.yaml
 
 if is_openshift; then
   apply route.yaml
-else
-  echo "==> Skipping route.yaml (not an OpenShift cluster; use an Ingress instead)"
-fi
 
-if [ -n "$ENABLE_OPENSHIFT_MONITORING" ]; then
-  if is_openshift; then
+  if [ -z "$SKIP_OPENSHIFT_MONITORING" ]; then
     apply openshift_monitoring_rolebinding.yaml
   else
-    echo "==> Skipping openshift_monitoring_rolebinding.yaml (not an OpenShift cluster)"
+    echo "==> Skipping openshift_monitoring_rolebinding.yaml (--no-openshift-monitoring)"
   fi
+else
+  echo "==> Skipping route.yaml (not an OpenShift cluster; use an Ingress instead)"
+  echo "==> Skipping openshift_monitoring_rolebinding.yaml (not an OpenShift cluster)"
 fi
 
 echo "==> Waiting for the deployment to become available"

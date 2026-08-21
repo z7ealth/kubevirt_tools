@@ -72,7 +72,7 @@ Open [http://localhost:4000](http://localhost:4000) and upload a valid kubeconfi
    ./deploy/k8s/install.sh
    ```
 
-   It creates the `kubevirt-tools` namespace if needed, applies all the manifests, auto-detects OpenShift to decide whether to apply `route.yaml`, and waits for the rollout to finish. Works with either `kubectl` or `oc` (auto-detected), and accepts `-n NAMESPACE` to install elsewhere, `--openshift` / `--kubernetes` to force the Route decision, or `--openshift-monitoring` to additionally grant read access to OpenShift's built-in cluster-monitoring Prometheus (see **VM CPU/memory history charts** below — opt-in, not applied by default). Safe to re-run.
+   It creates the `kubevirt-tools` namespace if needed, applies all the manifests, and waits for the rollout to finish. Works with either `kubectl` or `oc` (auto-detected), and accepts `-n NAMESPACE` to install elsewhere. On a detected OpenShift cluster it also automatically applies `route.yaml` and grants read access to OpenShift's built-in cluster-monitoring Prometheus (see **Kubernetes vs OpenShift** below); use `--openshift` / `--kubernetes` to force that detection, or `--no-openshift-monitoring` to skip just the monitoring grant. Safe to re-run.
 
    To remove everything again:
 
@@ -106,10 +106,18 @@ If that service account isn't found or usable (running outside a cluster, RBAC n
 
 ## Testing
 
-This app has been tested on both a plain KubeVirt cluster and OpenShift Virtualization (CNV), including an on-prem OpenShift install. Two things to know if you're on OpenShift:
+This app has been tested on both a plain KubeVirt cluster and OpenShift Virtualization (CNV), including an on-prem OpenShift install. See **Kubernetes vs OpenShift** below for the handful of things that differ between the two.
 
-- **Self-signed / internal CA**: on-prem clusters commonly fail the in-cluster service-account sign-in's API reachability check against their own CA, silently falling back to the manual kubeconfig upload screen. Set `KUBERNETES_INSECURE_SKIP_TLS_VERIFY` (see **Configuration**) if that happens to you.
-- **KubeVirt version shows as a digest**: OpenShift Virtualization reports `status.observedKubeVirtVersion` as a full image digest rather than a semver string (a Red Hat/OLM packaging difference, not a bug here) — the dashboard shortens it for display and shows the full digest on hover.
+## Kubernetes vs OpenShift
+
+Everything in this app works the same on both — this table is just the handful of places behavior or setup actually differs. If you're not sure which of these apply to you, none of them are needed on a plain Kubernetes/KubeVirt cluster; read down the OpenShift column only if that's what you're running.
+
+| | Plain Kubernetes / KubeVirt | OpenShift / OpenShift Virtualization |
+|---|---|---|
+| **Exposing the app** | No Route object; use an **Ingress** (not included, add your own) or `kubectl port-forward` | `install.sh` applies `deploy/k8s/route.yaml` automatically |
+| **In-cluster sign-in TLS** | Usually just works | On-prem / self-signed-CA clusters often need `KUBERNETES_INSECURE_SKIP_TLS_VERIFY=true` — otherwise sign-in silently falls back to the manual kubeconfig upload screen (see **Signing in**) |
+| **VM CPU/memory history charts** | Deploy your own Prometheus; no extra RBAC or TLS config needed | Can reuse the built-in cluster-monitoring Prometheus instead — `install.sh` grants the required `cluster-monitoring-view` RBAC automatically, but you still need to set `PROMETHEUS_URL` to it and `PROMETHEUS_INSECURE_SKIP_TLS_VERIFY=true` yourself (its certificate is signed by OpenShift's internal `service-ca`) — see **VM CPU/memory history charts** below |
+| **KubeVirt version display** | Shows a normal version string (e.g. `v1.x.x`) | Shows a shortened image digest (e.g. `sha256:abc123…`, full value on hover) — that's genuinely what OpenShift Virtualization's `KubeVirt` CR reports, not a display bug |
 
 ## Work in progress (WIP)
 
@@ -177,10 +185,8 @@ The VM detail page's CPU/memory charts show the last 30 minutes of real usage hi
 
 To enable, you have two options:
 
-- **Your own Prometheus** (simplest) — deploy one (e.g. `kube-prometheus-stack`) so it scrapes kubelet/cAdvisor, then set `PROMETHEUS_URL` to its address. No auth, no extra RBAC needed.
-- **OpenShift's built-in cluster-monitoring Prometheus** — point `PROMETHEUS_URL` at `https://prometheus-k8s.openshift-monitoring.svc.cluster.local:9091` (base URL only, no `/api` suffix). It's fronted by `kube-rbac-proxy`, so it needs both:
-  1. RBAC: install with `./deploy/k8s/install.sh --openshift-monitoring`, which grants the app's service account the built-in `cluster-monitoring-view` ClusterRole (opt-in — not applied by default, since it's extra cluster-wide read access). The app already sends its own in-cluster service-account token as a Bearer credential automatically; this just gives that token permission to use it.
-  2. TLS trust: its certificate is signed by OpenShift's internal `service-ca`, which isn't in the pod's default trust store — set `PROMETHEUS_INSECURE_SKIP_TLS_VERIFY=true` (see **Configuration**).
+- **Your own Prometheus** (works on both Kubernetes and OpenShift) — deploy one (e.g. `kube-prometheus-stack`) so it scrapes kubelet/cAdvisor, then set `PROMETHEUS_URL` to its address. No auth, no extra RBAC needed.
+- **OpenShift's built-in cluster-monitoring Prometheus** — point `PROMETHEUS_URL` at `https://prometheus-k8s.openshift-monitoring.svc.cluster.local:9091` (base URL only, no `/api` suffix). See **Kubernetes vs OpenShift** below — it needs both the RBAC `install.sh` already applies automatically on OpenShift, and `PROMETHEUS_INSECURE_SKIP_TLS_VERIFY=true`.
 
 ### Application config (`config :kubevirt_tools, …`)
 
