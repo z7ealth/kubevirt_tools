@@ -23,6 +23,15 @@ defmodule KubevirtToolsWeb.DashboardLive do
   @cluster_usage_prometheus_hint "Prometheus not detected, either install it or set PROMETHEUS_URL to where its running"
   @auto_refresh_ms 30_000
 
+  # Per-tab column filters. Empty string means "All" (no filter applied).
+  @default_filters %{
+    "vms" => %{"phase" => "", "node" => "", "agent" => ""},
+    "networks" => %{"binding" => "", "vmi_phase" => ""},
+    "disks" => %{"volume_kind" => "", "storage_class" => "", "pvc_phase" => ""},
+    "storage_classes" => %{"provisioner" => ""},
+    "nodes" => %{"ready" => "", "role" => ""}
+  }
+
   @impl true
   def mount(params, _session, socket) do
     token = socket.assigns.kubeconfig_token
@@ -33,6 +42,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       |> assign(:current_scope, %{})
       |> assign(:active_tab, tab_atom_from_string(params["tab"], :dashboard))
       |> assign(:prometheus_live, nil)
+      |> assign(:filters, @default_filters)
 
     socket =
       if connected?(socket) do
@@ -63,6 +73,18 @@ defmodule KubevirtToolsWeb.DashboardLive do
     {:noreply,
      socket
      |> assign_async(:kubevirt, fn -> load_kubevirt(token) end)}
+  end
+
+  @impl true
+  def handle_event("set_filter", %{"tab" => tab, "field" => field, "value" => value}, socket) do
+    filters = put_in(socket.assigns.filters, [tab, field], value)
+    {:noreply, assign(socket, :filters, filters)}
+  end
+
+  @impl true
+  def handle_event("clear_filters", %{"tab" => tab}, socket) do
+    filters = Map.put(socket.assigns.filters, tab, Map.fetch!(@default_filters, tab))
+    {:noreply, assign(socket, :filters, filters)}
   end
 
   defp tab_atom_from_string(tab, default) do
@@ -430,6 +452,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                         pvcs={List.wrap(data.pvcs)}
                         virt_launcher_pods={List.wrap(data.virt_launcher_pods)}
                         pod_metrics={List.wrap(data.pod_metrics)}
+                        filters={@filters["vms"]}
                         empty_label="No VirtualMachines found."
                         id_prefix="vm"
                       />
@@ -480,6 +503,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     <.virtual_machine_network_interfaces_table
                       vms={data.vms}
                       vmis={if(data.vmi_error, do: [], else: data.vmis)}
+                      filters={@filters["networks"]}
                       id_prefix="vm-net"
                     />
                   <% end %>
@@ -515,6 +539,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     <.virtual_machine_disks_detail_table
                       vms={data.vms}
                       pvcs={List.wrap(data.pvcs)}
+                      filters={@filters["disks"]}
                       id_prefix="vm-disk"
                     />
                   <% end %>
@@ -549,6 +574,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     <.storage_classes_table
                       storage_classes={List.wrap(data.storage_classes)}
                       pvcs={List.wrap(data.pvcs)}
+                      filters={@filters["storage_classes"]}
                       id_prefix="storage-class"
                     />
                   <% end %>
@@ -593,6 +619,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       vmis={if(data.vmi_error, do: [], else: data.vmis)}
                       node_metrics={List.wrap(data.node_metrics)}
                       prometheus_node_detail={m.prometheus_node_detail}
+                      filters={@filters["nodes"]}
                       id_prefix="node"
                     />
                   <% end %>
@@ -775,6 +802,51 @@ defmodule KubevirtToolsWeb.DashboardLive do
     >
       <.icon name="hero-information-circle" class="size-5" />
     </span>
+    """
+  end
+
+  attr :tab, :string, required: true
+  attr :filters, :map, required: true
+
+  attr :specs, :list,
+    required: true,
+    doc: "[%{field: \"phase\", label: \"Phase\", options: [\"Running\", ...]}, ...]"
+
+  defp table_filter_bar(assigns) do
+    active? = Enum.any?(assigns.filters, fn {_k, v} -> v != "" end)
+    assigns = assign(assigns, :active?, active?)
+
+    ~H"""
+    <div class="flex flex-wrap items-center gap-2">
+      <div :for={spec <- @specs} class="flex items-center gap-1.5">
+        <label class="text-xs text-base-content/55">{spec.label}</label>
+        <select
+          class="select select-xs select-bordered"
+          phx-change="set_filter"
+          phx-value-tab={@tab}
+          phx-value-field={spec.field}
+          name="value"
+        >
+          <option value="" selected={Map.get(@filters, spec.field, "") == ""}>All</option>
+          <option
+            :for={opt <- spec.options}
+            value={opt}
+            selected={Map.get(@filters, spec.field, "") == opt}
+          >
+            {opt}
+          </option>
+        </select>
+      </div>
+      <button
+        :if={@active?}
+        type="button"
+        phx-click="clear_filters"
+        phx-value-tab={@tab}
+        class="btn btn-ghost btn-xs"
+      >
+        Clear filters
+      </button>
+    </div>
     """
   end
 
@@ -1022,118 +1094,147 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :pvcs, :list, default: []
   attr :virt_launcher_pods, :list, default: []
   attr :pod_metrics, :list, default: []
+  attr :filters, :map, default: %{}
   attr :empty_label, :string, required: true
   attr :id_prefix, :string, required: true
 
   defp virtual_machines_table(assigns) do
+    all_rows =
+      virtual_machines_table_rows(
+        assigns.items,
+        List.wrap(assigns.vmis),
+        List.wrap(assigns.virt_launcher_pods),
+        List.wrap(assigns.pod_metrics)
+      )
+
+    filters = assigns.filters
+    rows = Enum.filter(all_rows, &vm_row_matches_filters?(&1, filters))
+
     assigns =
       assigns
-      |> assign(:vmi_lookup, vmi_index_by_ns_name(List.wrap(assigns.vmis)))
-      |> assign(:pvc_by_ns_claim, pvc_requests_by_namespace_claim(List.wrap(assigns.pvcs)))
+      |> assign(:rows, rows)
+      |> assign(
+        :filter_specs,
+        [
+          %{field: "phase", label: "Phase", options: distinct_present(all_rows, & &1.phase)},
+          %{field: "node", label: "Node", options: distinct_present(all_rows, & &1.node)},
+          %{field: "agent", label: "Agent", options: ["Running", "Not running"]}
+        ]
+      )
 
     ~H"""
-    <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-      <table class="table table-sm">
-        <thead class="bg-base-200/60 text-base-content/80">
-          <tr>
-            <th>Name</th>
-            <th>Phase</th>
-            <th title="Used / configured — used comes from metrics-server on the virt-launcher pod">
-              CPU
-            </th>
-            <th title="Used / configured — used comes from metrics-server on the virt-launcher pod">
-              Memory
-            </th>
-            <th>Node</th>
-            <th>IP</th>
-            <th title="QEMU guest agent connected">Agent</th>
-            <th>Created</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr :if={@items == []}>
-            <td colspan="8" class="text-center text-base-content/50 py-8">{@empty_label}</td>
-          </tr>
-          <%= for {item, i} <- Enum.with_index(@items) do %>
-            <% vmi = vmi_lookup_match(@vmi_lookup, item) %>
-            <%
-              usage =
-                ClusterMetrics.vm_resource_usage(item, @virt_launcher_pods, @pod_metrics)
-
-              cpu_pct = vm_cpu_usage_pct(item, vmi, usage)
-              mem_pct = vm_mem_usage_pct(item, vmi, usage)
-            %>
-            <tr
-              id={"#{@id_prefix}-row-#{i}"}
-              class="hover:bg-base-200/40 transition-colors cursor-pointer"
-              phx-click={JS.navigate(~p"/vms/#{vm_meta(item, :namespace)}/#{vm_meta(item, :name)}")}
-            >
-              <td class="whitespace-nowrap">
-                <div class="font-medium">{vm_meta(item, :name)}</div>
-                <div class="font-mono text-xs text-base-content/60">
-                  {vm_meta(item, :namespace)}
-                </div>
-              </td>
-              <td>
-                <span class={vm_phase_badge_classes(item)}>{vm_phase(item)}</span>
-              </td>
-              <td
-                class="text-xs tabular-nums font-medium"
-                title={
-                  if(vm_usage_unavailable?(usage),
-                    do: "Usage unavailable — no metrics-server data for this VM's pod yet",
-                    else: "sockets × cores × threads"
-                  )
-                }
-              >
-                {vm_cpu_usage_display(item, vmi, usage)}
-                <span :if={cpu_pct} class={["ml-1", usage_pct_color_class(cpu_pct)]}>
-                  {cpu_pct}%
-                </span>
-              </td>
-              <td
-                class="text-xs font-mono text-base-content/75"
-                title={
-                  if(vm_usage_unavailable?(usage),
-                    do: "Usage unavailable — no metrics-server data for this VM's pod yet",
-                    else: nil
-                  )
-                }
-              >
-                {vm_mem_usage_display(item, vmi, usage)}
-                <span :if={mem_pct} class={["ml-1", usage_pct_color_class(mem_pct)]}>
-                  {mem_pct}%
-                </span>
-              </td>
-              <td
-                class="font-mono text-xs text-base-content/70 max-w-[10rem] truncate"
-                title={vmi_scheduling_node_name(vmi || %{})}
-              >
-                {if(vmi, do: vmi_scheduling_node_name(vmi), else: "—")}
-              </td>
-              <td
-                class="font-mono text-xs text-base-content/80 max-w-[9rem] truncate"
-                title={if(vmi, do: vmi_primary_ip(vmi), else: "")}
-              >
-                {if(vmi, do: vmi_primary_ip(vmi), else: "—")}
-              </td>
-              <td>
-                <span :if={vmi_agent_connected?(vmi)} class="text-xs font-medium text-primary">
-                  Running
-                </span>
-                <span :if={!vmi_agent_connected?(vmi)} class="text-xs font-medium text-stopped">
-                  Not running
-                </span>
-              </td>
-              <td class="text-xs text-base-content/60 whitespace-nowrap">
-                {vm_meta(item, :created)}
+    <div class="space-y-2">
+      <.table_filter_bar tab="vms" filters={@filters} specs={@filter_specs} />
+      <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
+        <table class="table table-sm">
+          <thead class="bg-base-200/60 text-base-content/80">
+            <tr>
+              <th>Name</th>
+              <th>Phase</th>
+              <th title="Used / configured — used comes from metrics-server on the virt-launcher pod">
+                CPU
+              </th>
+              <th title="Used / configured — used comes from metrics-server on the virt-launcher pod">
+                Memory
+              </th>
+              <th>Node</th>
+              <th>IP</th>
+              <th title="QEMU guest agent connected">Agent</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :if={@rows == []}>
+              <td colspan="8" class="text-center text-base-content/50 py-8">
+                {if(@items == [], do: @empty_label, else: "No VMs match the current filters.")}
               </td>
             </tr>
-          <% end %>
-        </tbody>
-      </table>
+            <%= for {row, i} <- Enum.with_index(@rows) do %>
+              <tr
+                id={"#{@id_prefix}-row-#{i}"}
+                class="hover:bg-base-200/40 transition-colors cursor-pointer"
+                phx-click={JS.navigate(~p"/vms/#{row.namespace}/#{row.name}")}
+              >
+                <td class="whitespace-nowrap">
+                  <div class="font-medium">{row.name}</div>
+                  <div class="font-mono text-xs text-base-content/60">{row.namespace}</div>
+                </td>
+                <td>
+                  <span class={row.phase_badge_classes}>{row.phase}</span>
+                </td>
+                <td
+                  class="text-xs tabular-nums font-medium"
+                  title={
+                    if(row.usage_unavailable?,
+                      do: "Usage unavailable — no metrics-server data for this VM's pod yet",
+                      else: "sockets × cores × threads"
+                    )
+                  }
+                >
+                  {row.cpu_display}
+                  <span :if={row.cpu_pct} class={["ml-1", usage_pct_color_class(row.cpu_pct)]}>
+                    {row.cpu_pct}%
+                  </span>
+                </td>
+                <td
+                  class="text-xs font-mono text-base-content/75"
+                  title={
+                    if(row.usage_unavailable?,
+                      do: "Usage unavailable — no metrics-server data for this VM's pod yet",
+                      else: nil
+                    )
+                  }
+                >
+                  {row.mem_display}
+                  <span :if={row.mem_pct} class={["ml-1", usage_pct_color_class(row.mem_pct)]}>
+                    {row.mem_pct}%
+                  </span>
+                </td>
+                <td
+                  class="font-mono text-xs text-base-content/70 max-w-[10rem] truncate"
+                  title={row.node}
+                >
+                  {row.node}
+                </td>
+                <td
+                  class="font-mono text-xs text-base-content/80 max-w-[9rem] truncate"
+                  title={row.ip}
+                >
+                  {row.ip}
+                </td>
+                <td>
+                  <span :if={row.agent_connected?} class="text-xs font-medium text-primary">
+                    Running
+                  </span>
+                  <span :if={!row.agent_connected?} class="text-xs font-medium text-stopped">
+                    Not running
+                  </span>
+                </td>
+                <td class="text-xs text-base-content/60 whitespace-nowrap">{row.created}</td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
     </div>
     """
+  end
+
+  defp vm_row_matches_filters?(row, filters) do
+    matches_field?(filters["phase"], row.phase) and
+      matches_field?(filters["node"], row.node) and
+      matches_field?(filters["agent"], if(row.agent_connected?, do: "Running", else: "Not running"))
+  end
+
+  defp matches_field?("", _value), do: true
+  defp matches_field?(filter, value), do: filter == value
+
+  defp distinct_present(rows, fun) do
+    rows
+    |> Enum.map(fun)
+    |> Enum.reject(&(&1 in [nil, "", "—"]))
+    |> Enum.uniq()
+    |> Enum.sort()
   end
 
   attr :items, :list, required: true
@@ -1192,15 +1293,35 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   attr :vms, :list, required: true
   attr :vmis, :list, default: []
+  attr :filters, :map, default: %{}
   attr :id_prefix, :string, required: true
 
   defp virtual_machine_network_interfaces_table(assigns) do
-    rows = virtual_machine_network_interface_rows(assigns.vms, List.wrap(assigns.vmis))
-    assigns = assign(assigns, :rows, rows)
+    all_rows = virtual_machine_network_interface_rows(assigns.vms, List.wrap(assigns.vmis))
+    filters = assigns.filters
+    rows = Enum.filter(all_rows, &network_row_matches_filters?(&1, filters))
+
+    assigns =
+      assigns
+      |> assign(:rows, rows)
+      |> assign(:all_rows_empty?, all_rows == [])
+      |> assign(
+        :filter_specs,
+        [
+          %{field: "binding", label: "Binding", options: distinct_present(all_rows, & &1.binding)},
+          %{
+            field: "vmi_phase",
+            label: "VMI phase",
+            options: distinct_present(all_rows, & &1.vmi_phase)
+          }
+        ]
+      )
 
     ~H"""
-    <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-      <table class="table table-sm">
+    <div class="space-y-2">
+      <.table_filter_bar tab="networks" filters={@filters} specs={@filter_specs} />
+      <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
+        <table class="table table-sm">
         <thead class="bg-base-200/60 text-base-content/80">
           <tr>
             <th>VM</th>
@@ -1213,7 +1334,10 @@ defmodule KubevirtToolsWeb.DashboardLive do
         <tbody>
           <tr :if={@rows == []}>
             <td colspan="5" class="text-center text-base-content/50 py-8">
-              No network interfaces defined on any VirtualMachine.
+              {if(@all_rows_empty?,
+                do: "No network interfaces defined on any VirtualMachine.",
+                else: "No interfaces match the current filters."
+              )}
             </td>
           </tr>
           <%= for {row, i} <- Enum.with_index(@rows) do %>
@@ -1242,79 +1366,139 @@ defmodule KubevirtToolsWeb.DashboardLive do
             </tr>
           <% end %>
         </tbody>
-      </table>
+        </table>
+      </div>
     </div>
     """
+  end
+
+  defp network_row_matches_filters?(row, filters) do
+    matches_field?(filters["binding"], row.binding) and
+      matches_field?(filters["vmi_phase"], row.vmi_phase)
   end
 
   attr :vms, :list, required: true
   attr :pvcs, :list, default: []
+  attr :filters, :map, default: %{}
   attr :id_prefix, :string, required: true
 
   defp virtual_machine_disks_detail_table(assigns) do
-    rows = virtual_machine_disk_detail_rows(assigns.vms, List.wrap(assigns.pvcs))
-    assigns = assign(assigns, :rows, rows)
+    all_rows = virtual_machine_disk_detail_rows(assigns.vms, List.wrap(assigns.pvcs))
+    filters = assigns.filters
+    rows = Enum.filter(all_rows, &disk_row_matches_filters?(&1, filters))
+
+    assigns =
+      assigns
+      |> assign(:rows, rows)
+      |> assign(:all_rows_empty?, all_rows == [])
+      |> assign(
+        :filter_specs,
+        [
+          %{
+            field: "volume_kind",
+            label: "Volume kind",
+            options: distinct_present(all_rows, & &1.volume_kind)
+          },
+          %{
+            field: "storage_class",
+            label: "Storage class",
+            options: distinct_present(all_rows, & &1.storage_class)
+          },
+          %{
+            field: "pvc_phase",
+            label: "PVC phase",
+            options: distinct_present(all_rows, & &1.pvc_phase)
+          }
+        ]
+      )
 
     ~H"""
-    <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-      <table class="table table-sm">
-        <thead class="bg-base-200/60 text-base-content/80">
-          <tr>
-            <th>VM</th>
-            <th>Disk</th>
-            <th>Volume kind</th>
-            <th>Size</th>
-            <th>Storage class</th>
-            <th>PVC phase</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr :if={@rows == []}>
-            <td colspan="6" class="text-center text-base-content/50 py-8">
-              No disks defined on any VirtualMachine.
-            </td>
-          </tr>
-          <%= for {row, i} <- Enum.with_index(@rows) do %>
-            <tr
-              id={"#{@id_prefix}-row-#{i}"}
-              class="hover:bg-base-200/40 transition-colors cursor-pointer"
-              phx-click={JS.navigate(~p"/disks/#{row.namespace}/#{row.vm_name}/#{row.disk_name}")}
-            >
-              <td class="whitespace-nowrap">
-                <div class="font-medium">{row.vm_name}</div>
-                <div class="font-mono text-xs text-base-content/60">{row.namespace}</div>
-              </td>
-              <td class="text-xs font-mono text-base-content/80">{row.disk_name}</td>
-              <td class="text-xs whitespace-nowrap">{row.volume_kind}</td>
-              <td class="text-xs tabular-nums whitespace-nowrap">{row.size}</td>
-              <td class="text-xs max-w-[8rem] truncate" title={row.storage_class}>
-                {row.storage_class}
-              </td>
-              <td class="text-xs">{row.pvc_phase}</td>
+    <div class="space-y-2">
+      <.table_filter_bar tab="disks" filters={@filters} specs={@filter_specs} />
+      <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
+        <table class="table table-sm">
+          <thead class="bg-base-200/60 text-base-content/80">
+            <tr>
+              <th>VM</th>
+              <th>Disk</th>
+              <th>Volume kind</th>
+              <th>Size</th>
+              <th>Storage class</th>
+              <th>PVC phase</th>
             </tr>
-          <% end %>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <tr :if={@rows == []}>
+              <td colspan="6" class="text-center text-base-content/50 py-8">
+                {if(@all_rows_empty?,
+                  do: "No disks defined on any VirtualMachine.",
+                  else: "No disks match the current filters."
+                )}
+              </td>
+            </tr>
+            <%= for {row, i} <- Enum.with_index(@rows) do %>
+              <tr
+                id={"#{@id_prefix}-row-#{i}"}
+                class="hover:bg-base-200/40 transition-colors cursor-pointer"
+                phx-click={JS.navigate(~p"/disks/#{row.namespace}/#{row.vm_name}/#{row.disk_name}")}
+              >
+                <td class="whitespace-nowrap">
+                  <div class="font-medium">{row.vm_name}</div>
+                  <div class="font-mono text-xs text-base-content/60">{row.namespace}</div>
+                </td>
+                <td class="text-xs font-mono text-base-content/80">{row.disk_name}</td>
+                <td class="text-xs whitespace-nowrap">{row.volume_kind}</td>
+                <td class="text-xs tabular-nums whitespace-nowrap">{row.size}</td>
+                <td class="text-xs max-w-[8rem] truncate" title={row.storage_class}>
+                  {row.storage_class}
+                </td>
+                <td class="text-xs">{row.pvc_phase}</td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
     </div>
     """
   end
 
+  defp disk_row_matches_filters?(row, filters) do
+    matches_field?(filters["volume_kind"], row.volume_kind) and
+      matches_field?(filters["storage_class"], row.storage_class) and
+      matches_field?(filters["pvc_phase"], row.pvc_phase)
+  end
+
   attr :storage_classes, :list, required: true
   attr :pvcs, :list, required: true
+  attr :filters, :map, default: %{}
   attr :id_prefix, :string, required: true
 
   defp storage_classes_table(assigns) do
     pvc_by_class = pvc_counts_by_storage_class_name(assigns.pvcs)
     sc_names = storage_class_name_set(assigns.storage_classes)
-    rows = storage_classes_table_rows(assigns.storage_classes, pvc_by_class)
+    all_rows = storage_classes_table_rows(assigns.storage_classes, pvc_by_class)
     orphan_refs = orphan_storage_class_refs_with_counts(pvc_by_class, sc_names)
     unset_count = Map.get(pvc_by_class, "", 0)
+
+    filters = assigns.filters
+    rows = Enum.filter(all_rows, &storage_class_row_matches_filters?(&1, filters))
 
     assigns =
       assigns
       |> assign(:rows, rows)
+      |> assign(:all_rows_empty?, all_rows == [])
       |> assign(:orphan_refs, orphan_refs)
       |> assign(:unset_count, unset_count)
+      |> assign(
+        :filter_specs,
+        [
+          %{
+            field: "provisioner",
+            label: "Provisioner",
+            options: distinct_present(all_rows, & &1.provisioner)
+          }
+        ]
+      )
 
     ~H"""
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-base-content/70 mb-2">
@@ -1329,23 +1513,28 @@ defmodule KubevirtToolsWeb.DashboardLive do
         PVC{if @unset_count == 1, do: "", else: "s"} with no storageClassName
       </span>
     </div>
-    <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-      <table class="table table-sm">
-        <thead class="bg-base-200/60 text-base-content/80">
-          <tr>
-            <th>Name</th>
-            <th>Default</th>
-            <th>Provisioner</th>
-            <th title="PVCs in the cluster using this storageClassName">PVCs</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr :if={@rows == []}>
-            <td colspan="4" class="text-center text-base-content/50 py-8">
-              No StorageClass objects returned from the API.
-            </td>
-          </tr>
-          <%= for {row, i} <- Enum.with_index(@rows) do %>
+    <div class="space-y-2">
+      <.table_filter_bar tab="storage_classes" filters={@filters} specs={@filter_specs} />
+      <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
+        <table class="table table-sm">
+          <thead class="bg-base-200/60 text-base-content/80">
+            <tr>
+              <th>Name</th>
+              <th>Default</th>
+              <th>Provisioner</th>
+              <th title="PVCs in the cluster using this storageClassName">PVCs</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :if={@rows == []}>
+              <td colspan="4" class="text-center text-base-content/50 py-8">
+                {if(@all_rows_empty?,
+                  do: "No StorageClass objects returned from the API.",
+                  else: "No storage classes match the current filters."
+                )}
+              </td>
+            </tr>
+            <%= for {row, i} <- Enum.with_index(@rows) do %>
             <tr
               id={"#{@id_prefix}-row-#{i}"}
               class="hover:bg-base-200/40 transition-colors cursor-pointer"
@@ -1368,8 +1557,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
               <td class="text-xs tabular-nums font-medium">{row.pvc_count}</td>
             </tr>
           <% end %>
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
     </div>
     <div
       :if={@orphan_refs != []}
@@ -1390,10 +1580,15 @@ defmodule KubevirtToolsWeb.DashboardLive do
     """
   end
 
+  defp storage_class_row_matches_filters?(row, filters) do
+    matches_field?(filters["provisioner"], row.provisioner)
+  end
+
   attr :nodes, :list, required: true
   attr :vmis, :list, default: []
   attr :node_metrics, :list, default: []
   attr :prometheus_node_detail, :map, default: %{}
+  attr :filters, :map, default: %{}
   attr :id_prefix, :string, required: true
 
   defp nodes_table(assigns) do
@@ -1404,59 +1599,83 @@ defmodule KubevirtToolsWeb.DashboardLive do
         assigns.prometheus_node_detail || %{}
       )
 
-    rows = kubernetes_nodes_table_rows(assigns.nodes, assigns.vmis, merged)
-    assigns = assign(assigns, :rows, rows)
+    all_rows = kubernetes_nodes_table_rows(assigns.nodes, assigns.vmis, merged)
+    filters = assigns.filters
+    rows = Enum.filter(all_rows, &node_row_matches_filters?(&1, filters))
+
+    assigns =
+      assigns
+      |> assign(:rows, rows)
+      |> assign(:all_rows_empty?, all_rows == [])
+      |> assign(
+        :filter_specs,
+        [
+          %{field: "ready", label: "Ready", options: ["Yes", "No"]},
+          %{field: "role", label: "Role", options: distinct_present(all_rows, & &1.role)}
+        ]
+      )
 
     ~H"""
-    <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-      <table class="table table-sm">
-        <thead class="bg-base-200/60 text-base-content/80">
-          <tr>
-            <th>Name</th>
-            <th>Ready</th>
-            <th>Role</th>
-            <th>VMIs</th>
-            <th title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target">
-              CPU %
-            </th>
-            <th title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target">
-              Mem %
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr :if={@rows == []}>
-            <td colspan="6" class="text-center text-base-content/50 py-8">
-              No nodes returned from the API.
-            </td>
-          </tr>
-          <%= for {row, i} <- Enum.with_index(@rows) do %>
-            <tr
-              id={"#{@id_prefix}-row-#{i}"}
-              class="hover:bg-base-200/40 transition-colors cursor-pointer"
-              title={row.scheduling_hint}
-              phx-click={JS.navigate(~p"/nodes/#{row.name}")}
-            >
-              <td class="font-mono text-xs font-medium whitespace-nowrap">{row.name}</td>
-              <td>
-                <%= if row.is_ready do %>
-                  <span class="badge badge-sm badge-success">Yes</span>
-                <% else %>
-                  <span class="badge badge-sm badge-error">No</span>
-                <% end %>
-              </td>
-              <td>
-                <span class="badge badge-sm badge-ghost font-mono text-[0.7rem]">{row.role}</span>
-              </td>
-              <td class="text-xs tabular-nums font-medium">{row.vmi_count}</td>
-              <td class="text-xs tabular-nums">{row.cpu_pct}</td>
-              <td class="text-xs tabular-nums">{row.mem_pct}</td>
+    <div class="space-y-2">
+      <.table_filter_bar tab="nodes" filters={@filters} specs={@filter_specs} />
+      <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
+        <table class="table table-sm">
+          <thead class="bg-base-200/60 text-base-content/80">
+            <tr>
+              <th>Name</th>
+              <th>Ready</th>
+              <th>Role</th>
+              <th>VMIs</th>
+              <th title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target">
+                CPU %
+              </th>
+              <th title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target">
+                Mem %
+              </th>
             </tr>
-          <% end %>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <tr :if={@rows == []}>
+              <td colspan="6" class="text-center text-base-content/50 py-8">
+                {if(@all_rows_empty?,
+                  do: "No nodes returned from the API.",
+                  else: "No nodes match the current filters."
+                )}
+              </td>
+            </tr>
+            <%= for {row, i} <- Enum.with_index(@rows) do %>
+              <tr
+                id={"#{@id_prefix}-row-#{i}"}
+                class="hover:bg-base-200/40 transition-colors cursor-pointer"
+                title={row.scheduling_hint}
+                phx-click={JS.navigate(~p"/nodes/#{row.name}")}
+              >
+                <td class="font-mono text-xs font-medium whitespace-nowrap">{row.name}</td>
+                <td>
+                  <%= if row.is_ready do %>
+                    <span class="badge badge-sm badge-success">Yes</span>
+                  <% else %>
+                    <span class="badge badge-sm badge-error">No</span>
+                  <% end %>
+                </td>
+                <td>
+                  <span class="badge badge-sm badge-ghost font-mono text-[0.7rem]">{row.role}</span>
+                </td>
+                <td class="text-xs tabular-nums font-medium">{row.vmi_count}</td>
+                <td class="text-xs tabular-nums">{row.cpu_pct}</td>
+                <td class="text-xs tabular-nums">{row.mem_pct}</td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
     </div>
     """
+  end
+
+  defp node_row_matches_filters?(row, filters) do
+    matches_field?(filters["ready"], if(row.is_ready, do: "Yes", else: "No")) and
+      matches_field?(filters["role"], row.role)
   end
 
   defp dashboard_tab_defs do

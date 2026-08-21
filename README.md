@@ -13,11 +13,11 @@ Phoenix web app for **cluster-wide KubeVirt and Kubernetes visibility**: sign in
 ## What you get
 
 - **Dashboard** — VM / VMI counts, node capacity charts, PVC breakdowns, optional **Prometheus** overlays for cluster usage and node CPU/memory when metrics-server is missing. Auto-refreshes every 30s.
-- **VMs** — VirtualMachine list with VMI join, orphan VMI section, real CPU/RAM usage (used/total, refreshed every 30s) via metrics-server on the virt-launcher pod, and a color-coded QEMU guest agent indicator. Click a row for a full detail page, including CPU/memory history charts (last 30 min — **requires Prometheus**, see below).
-- **Networks** — Template interfaces vs live VMI network data. Click a row for full interface detail.
-- **Disks** — Volume and PVC-backed disk detail. Click a row for full disk detail.
-- **Storage classes** — `StorageClass` inventory with provisioner, reclaim policy, binding mode, expansion, parameters, and PVC counts (plus warnings for mismatched PVC references). Click a row for full detail, including every PVC using that class.
-- **Nodes** — Kubernetes Nodes with scheduling, metrics, and VMI counts. Click a row for full detail, including every VM scheduled on that node.
+- **VMs** — VirtualMachine list with VMI join, orphan VMI section, real CPU/RAM usage (used/total, refreshed every 30s) via metrics-server on the virt-launcher pod, and a color-coded QEMU guest agent indicator. Filter by Phase, Node, or Agent. Click a row for a full detail page, including CPU/memory history charts (last 30 min — **requires Prometheus**, see below).
+- **Networks** — Template interfaces vs live VMI network data. Filter by Binding or VMI phase. Click a row for full interface detail.
+- **Disks** — Volume and PVC-backed disk detail. Filter by Volume kind, Storage class, or PVC phase. Click a row for full disk detail.
+- **Storage classes** — `StorageClass` inventory with provisioner, reclaim policy, binding mode, expansion, parameters, and PVC counts (plus warnings for mismatched PVC references). Filter by Provisioner. Click a row for full detail, including every PVC using that class.
+- **Nodes** — Kubernetes Nodes with scheduling, metrics, and VMI counts. Filter by Ready or Role. Click a row for full detail, including every VM scheduled on that node.
 - **Topology** — Interactive node ↔ VM graph (vis-network).
 - **Export** — CSV / XLSX downloads of VM inventory.
 - **Metrics** — App exposes **`GET /metrics`** in Prometheus text format for scraping.

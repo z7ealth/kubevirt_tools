@@ -567,6 +567,40 @@ defmodule KubevirtTools.VmPresentation do
   def usage_pct_color_class(pct) when pct >= 50, do: "text-amber-400"
   def usage_pct_color_class(_pct), do: "text-primary"
 
+  @doc """
+  Precomputed row data for the VMs table — one map per VM with every display
+  field already resolved, matching the same "rows" pattern already used for
+  the Networks/Disks/Storage classes/Nodes tables (makes filtering trivial).
+  """
+  @spec virtual_machines_table_rows(list(map()), list(map()), list(map()), list(map())) ::
+          list(map())
+  def virtual_machines_table_rows(vms, vmis, virt_launcher_pods, pod_metrics) do
+    vmi_lookup = vmi_index_by_ns_name(vmis)
+
+    Enum.map(vms, fn vm ->
+      vmi = vmi_lookup_match(vmi_lookup, vm)
+      usage = ClusterMetrics.vm_resource_usage(vm, virt_launcher_pods, pod_metrics)
+
+      %{
+        vm: vm,
+        vmi: vmi,
+        namespace: vm_meta(vm, :namespace),
+        name: vm_meta(vm, :name),
+        phase: vm_phase(vm),
+        phase_badge_classes: vm_phase_badge_classes(vm),
+        cpu_display: vm_cpu_usage_display(vm, vmi, usage),
+        cpu_pct: vm_cpu_usage_pct(vm, vmi, usage),
+        mem_display: vm_mem_usage_display(vm, vmi, usage),
+        mem_pct: vm_mem_usage_pct(vm, vmi, usage),
+        usage_unavailable?: vm_usage_unavailable?(usage),
+        node: if(vmi, do: vmi_scheduling_node_name(vmi), else: "—"),
+        ip: if(vmi, do: vmi_primary_ip(vmi), else: "—"),
+        agent_connected?: vmi_agent_connected?(vmi),
+        created: vm_meta(vm, :created)
+      }
+    end)
+  end
+
   defp format_bytes_short(bytes) when is_integer(bytes) and bytes >= 0 do
     cond do
       bytes >= 1024 * 1024 * 1024 ->
