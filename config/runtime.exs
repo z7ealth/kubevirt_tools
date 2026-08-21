@@ -29,12 +29,23 @@ if config_env() == :prod do
   # want to use a different value for prod and you most likely don't want
   # to check this value into version control, so we use an environment
   # variable instead.
+  #
+  # If SECRET_KEY_BASE isn't set (e.g. no `mix`/`phx.gen.secret` available at
+  # install time, such as a plain `kubectl apply`), fall back to a randomly
+  # generated value so the app still boots. This value is not persisted, so
+  # it changes on every restart, invalidating existing sessions/cookies —
+  # set SECRET_KEY_BASE explicitly if you need sessions to survive restarts.
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
+      (
+        IO.warn("""
+        SECRET_KEY_BASE is not set; generating a random one for this boot.
+        Sessions will not survive restarts. Set SECRET_KEY_BASE to avoid this \
+        (see mix phx.gen.secret).
+        """)
+
+        64 |> :crypto.strong_rand_bytes() |> Base.encode64()
+      )
 
   host = System.get_env("PHX_HOST") || "example.com"
 

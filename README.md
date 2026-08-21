@@ -60,29 +60,25 @@ Open [http://localhost:4000](http://localhost:4000) and upload a valid kubeconfi
    cd kubevirt_tools
    ```
 
-2. **Create the namespace** (skip if it already exists):
+2. **(Optional) configure secrets** — edit `deploy/k8s/secret.yaml` and set `PHX_HOST` if you don't want the default `localhost`. `SECRET_KEY_BASE` and `PROMETHEUS_URL` can both be left unset — the app falls back to a randomly generated key and to `http://localhost:9090` respectively (see **Configuration** below).
+
+3. **Run the install script** (from the repo root):
 
    ```bash
-   kubectl create namespace kubevirt-tools
+   ./deploy/k8s/install.sh
    ```
 
-   On OpenShift you can use `oc new-project kubevirt-tools` instead.
+   It creates the `kubevirt-tools` namespace if needed, applies all the manifests, auto-detects OpenShift to decide whether to apply `route.yaml`, and waits for the rollout to finish. Works with either `kubectl` or `oc` (auto-detected), and accepts `-n NAMESPACE` to install elsewhere, or `--openshift` / `--kubernetes` to force the Route decision. Safe to re-run.
 
-3. **Configure secrets** — edit `deploy/k8s/secret.yaml` and set `SECRET_KEY_BASE` (e.g. `mix phx.gen.secret`), `PHX_HOST`, and any optional values such as `PROMETHEUS_URL`.
-
-4. **Apply the manifests** (from the repo root):
+   To remove everything again:
 
    ```bash
-   kubectl apply -f deploy/k8s/
+   ./deploy/k8s/uninstall.sh
    ```
 
-   With the OpenShift CLI:
+   This leaves the namespace itself in place (in case it's shared); pass `--purge-namespace` to delete it too.
 
-   ```bash
-   oc apply -f deploy/k8s/
-   ```
-
-   **`deploy/k8s/route.yaml` is OpenShift-only** (`route.openshift.io`). On a plain Kubernetes cluster, skip that file and expose the app with an **Ingress** (or another controller) targeting the `kubevirt-tools-service` Service yourself.
+   Prefer to apply the manifests yourself? `kubectl apply -f deploy/k8s/` (or `oc apply -f deploy/k8s/`) works too — just note that **`deploy/k8s/route.yaml` is OpenShift-only** (`route.openshift.io`) and will fail on a plain Kubernetes cluster; skip that file and expose the app with an **Ingress** (or another controller) targeting the `kubevirt-tools-service` Service yourself. You'll also need to create the namespace first (`kubectl create namespace kubevirt-tools`, or `oc new-project kubevirt-tools`) since it isn't included as a manifest.
 
 ### Quick expose (port-forward)
 
@@ -118,15 +114,16 @@ MIX_ENV=prod mix release --overwrite
 
 Omit `--overwrite` on the first build; use it when rebuilding so `mix release` does not stop at an interactive prompt.
 
-Set runtime environment variables as in **Configuration** (notably `SECRET_KEY_BASE` in `:prod`). Start the release with the HTTP server enabled:
+Set runtime environment variables as in **Configuration**. Start the release with the HTTP server enabled:
 
 ```bash
 cd _build/prod/rel/kubevirt_tools
-export SECRET_KEY_BASE="…"   # e.g. output of mix phx.gen.secret
 export PHX_HOST=example.com  # public hostname for URL generation
 export PORT=4000
 PHX_SERVER=true bin/kubevirt_tools start
 ```
+
+`SECRET_KEY_BASE` is optional — if unset, a random value is generated at boot (sessions won't survive a restart). Set `export SECRET_KEY_BASE="…"` (e.g. output of `mix phx.gen.secret` or `openssl rand -base64 48`) if you need sessions to persist across restarts.
 
 The release must be built on an OS **compatible with** the machine where you run it (same distribution family / libc expectations as a typical Elixir release). For more context, see the [Phoenix deployment guide](https://hexdocs.pm/phoenix/deployment.html).
 
@@ -140,10 +137,25 @@ The release must be built on an OS **compatible with** the machine where you run
 |----------|----------|---------|---------|
 | `PORT` | No | `4000` | HTTP listen port (see `config/runtime.exs`). |
 | `PHX_SERVER` | For releases | — | If set (any value), enables the web server (`server: true` on the endpoint). Example: `PHX_SERVER=true bin/kubevirt_tools start`. |
-| `SECRET_KEY_BASE` | **Yes** in `:prod` | — | Secret for signing cookies and tokens. Generate with `mix phx.gen.secret`. |
-| `PHX_HOST` | No (`:prod`) | `example.com` | Public host used in `url:` for the endpoint (production). |
+| `SECRET_KEY_BASE` | No | Randomly generated at boot | Secret for signing cookies and tokens. If unset, a random value is generated each time the app starts, so **existing sessions are invalidated on every restart**. Set this (e.g. `mix phx.gen.secret` or `openssl rand -base64 48`) if you need sessions to survive pod restarts. |
+| `PHX_HOST` | No (`:prod`) | `example.com` (`localhost` in `deploy/k8s/secret.yaml`) | Hostname end users type into the browser. Must match, or LiveView's WebSocket connection is rejected — see **Setting PHX_HOST** below. |
 | `PROMETHEUS_URL` | No | `http://localhost:9090` | Base URL for the Prometheus HTTP API (`/api/v1/query`, `/-/healthy`). Trimmed whitespace; set when Prometheus is not on localhost. |
 | `KUBERNETES_INSECURE_SKIP_TLS_VERIFY` | No | Unset (verify TLS) | If set to a truthy value (`true`, `1`, `yes`, `on`, case-insensitive), the app’s Kubernetes clients skip TLS certificate verification for **in-cluster** service-account connections and merge with kubeconfig mode. When unset, kubeconfig uploads still follow each context’s `insecure-skip-tls-verify` flag. Use only when appropriate (e.g. lab clusters with self-signed CAs). |
+
+### Setting PHX_HOST
+
+`PHX_HOST` isn't just cosmetic: Phoenix's default LiveView origin check compares the browser's `Origin` header against this value, so if it doesn't match the hostname in the address bar, the page loads but the dashboard's WebSocket connection is refused (it'll look "stuck"/disconnected). Set it to whatever hostname you actually type into the browser to reach the app:
+
+| How you reach the app | Set `PHX_HOST` to |
+|---|---|
+| `kubectl`/`oc port-forward` (e.g. a local kind cluster) | `localhost` — this is the default already in `deploy/k8s/secret.yaml`. |
+| OpenShift Route | The Route's hostname, e.g. `kubectl -n kubevirt-tools get route kubevirt-tools-route -o jsonpath='{.spec.host}'`. `install.sh` prints this after installing. |
+| Ingress | Whatever host you configured on the Ingress rule. |
+| NodePort / LoadBalancer Service | The external IP or DNS name pointing at it. |
+
+After changing it, re-apply the secret and restart the pod (`kubectl rollout restart deployment/kubevirt-tools-app -n kubevirt-tools`) so the new value takes effect.
+
+One more gotcha: `config/prod.exs` sets `force_ssl`, which redirects every host **except** `localhost`/`127.0.0.1` to HTTPS, assuming a TLS-terminating proxy in front (Route/Ingress) sets `X-Forwarded-Proto: https`. If you expose the app over plain HTTP on any other hostname (e.g. a bare NodePort with no TLS), that redirect has nowhere to land and requests will fail. Either put a TLS-terminating Ingress/Route in front, or add your hostname to the `exclude: [hosts: [...]]` list in `config/prod.exs`.
 
 ### Application config (`config :kubevirt_tools, …`)
 
