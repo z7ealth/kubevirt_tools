@@ -82,6 +82,9 @@ defmodule KubevirtTools.KubeconfigVerify do
       {:error, %YamlElixir.ParsingError{} = e} ->
         {:error, K8sSafeError.user_facing(e)}
 
+      {:error, reason} when is_binary(reason) ->
+        {:error, "Could not read kubeconfig — #{reason}."}
+
       {:error, other} ->
         {:error, "Could not read kubeconfig. #{K8sSafeError.user_facing(other)}"}
     end

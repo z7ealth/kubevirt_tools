@@ -22,15 +22,19 @@ rules:
   - apiGroups: [""]
     resources: [persistentvolumeclaims, resourcequotas, limitranges, events]
     verbs: [get, list]
+  # virt-launcher pods (ClusterInventory.list_virt_launcher_pods/1 — per-VM CPU/RAM usage)
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
   - apiGroups: ["events.k8s.io"]
     resources: [events]
     verbs: [get, list]
   - apiGroups: ["storage.k8s.io"]
     resources: [storageclasses]
     verbs: [get, list]
-  # metrics-server (ClusterMetrics.list_node_metrics/1 — resource name is "nodes")
+  # metrics-server (ClusterMetrics.list_node_metrics/1 and list_pod_metrics/1)
   - apiGroups: ["metrics.k8s.io"]
-    resources: [nodes]
+    resources: [nodes, pods]
     verbs: [get, list]
   # KubeVirt
   - apiGroups: ["kubevirt.io"]

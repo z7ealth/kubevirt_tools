@@ -384,4 +384,42 @@ defmodule KubevirtTools.DashboardCharts do
       "grid" => %{"padding" => %{"left" => 12, "right" => 8, "top" => 4, "bottom" => 28}}
     })
   end
+
+  @doc """
+  Live-updating area chart for a single 0–100 percent series over time.
+
+  `points` is a list of `{timestamp_ms, percent_or_nil}` — `nil` values render as a
+  gap in the line (used when usage couldn't be attributed for that sample).
+  """
+  def usage_area_chart(points, opts \\ []) when is_list(points) do
+    color = Keyword.get(opts, :color, @colors.blue)
+    name = Keyword.get(opts, :name, "Usage")
+
+    data = Enum.map(points, fn {ts, v} -> %{"x" => ts, "y" => v} end)
+
+    chart_with_opts(%{
+      "chart" => %{"type" => "area", "height" => 150},
+      "series" => [%{"name" => name, "data" => data}],
+      "colors" => [color],
+      "stroke" => %{"curve" => "smooth", "width" => 2},
+      "fill" => %{
+        "type" => "gradient",
+        "gradient" => %{"shadeIntensity" => 1, "opacityFrom" => 0.35, "opacityTo" => 0.02}
+      },
+      "markers" => %{"size" => 0},
+      "xaxis" => %{
+        "type" => "datetime",
+        "labels" => %{"style" => axis_label_style("10px")}
+      },
+      "yaxis" => %{
+        "min" => 0,
+        "max" => 100,
+        "tickAmount" => 4,
+        "labels" => %{"style" => axis_label_style("10px")}
+      },
+      "tooltip" => %{"x" => %{"format" => "HH:mm:ss"}},
+      "legend" => %{"show" => false},
+      "grid" => %{"padding" => %{"left" => 4, "right" => 8, "top" => 4, "bottom" => 0}}
+    })
+  end
 end

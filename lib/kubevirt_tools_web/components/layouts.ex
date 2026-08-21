@@ -129,18 +129,6 @@ defmodule KubevirtToolsWeb.Layouts do
             </svg>
             <span class="font-medium">GitHub</span>
           </a>
-          <span class="text-base-content/35 select-none" aria-hidden="true">|</span>
-          <a
-            href="https://z7ealth.dev"
-            class="inline-flex items-center gap-2 transition-colors hover:text-primary"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="z7ealth.dev"
-            id="footer-website-link"
-          >
-            <.icon name="hero-globe-alt" class="size-5 shrink-0 opacity-80" />
-            <span class="font-medium">z7ealth.dev</span>
-          </a>
         </div>
       </footer>
     </div>

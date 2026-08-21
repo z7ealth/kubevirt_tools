@@ -5,6 +5,19 @@ defmodule KubevirtTools.K8sConn do
 
   alias KubevirtTools.K8sReadOnlyMiddleware
   alias KubevirtTools.K8sTls
+  alias KubevirtTools.KubeconfigStore
+
+  @doc """
+  Resolves a read-only connection directly from a session token, looking up the
+  stored kubeconfig/service-account entry first. Convenience for LiveViews that
+  only need the connection (rather than the raw session entry).
+  """
+  @spec from_token(String.t()) :: {:ok, K8s.Conn.t()} | {:error, term()} | :error
+  def from_token(token) when is_binary(token) do
+    with {:ok, entry} <- KubeconfigStore.get(token) do
+      from_session_entry(entry)
+    end
+  end
 
   @doc """
   Builds a read-only connection from session storage: uploaded kubeconfig YAML or
@@ -46,6 +59,16 @@ defmodule KubevirtTools.K8sConn do
       {:error, _} = err ->
         err
     end
+  rescue
+    # K8s.Conn.from_string/2 assumes the parsed YAML is a kubeconfig map — content
+    # that parses as something else entirely (e.g. a bare token or plain text
+    # pasted where a kubeconfig file was expected) makes it raise instead of
+    # returning {:error, _}. Surface that as a normal error rather than crashing.
+    _ ->
+      {:error,
+       "this doesn't look like a kubeconfig file (expected a YAML document with " <>
+         "clusters/contexts/users, e.g. from `oc config view --minify --flatten` " <>
+         "or `kubectl config view --raw`)"}
   end
 
   @doc """

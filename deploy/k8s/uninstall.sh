@@ -71,6 +71,9 @@ if is_openshift; then
 else
   echo "==> Skipping route.yaml (not an OpenShift cluster)"
 fi
+# Standard RBAC kind (unlike Route), safe to attempt even if --openshift-monitoring
+# was never used at install time — --ignore-not-found handles that.
+delete openshift_monitoring_rolebinding.yaml
 delete service.yaml
 delete deployment.yaml
 delete secret.yaml

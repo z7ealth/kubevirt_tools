@@ -46,6 +46,96 @@ defmodule KubevirtTools.ClusterMetrics do
   defp metrics_version_missing?(_), do: false
 
   @doc """
+  Lists PodMetrics cluster-wide (typically exposed by metrics-server). Used to
+  attribute real CPU/RAM usage to VMs via their virt-launcher pod.
+  """
+  @spec list_pod_metrics(K8s.Conn.t()) :: {:ok, list(map())} | {:error, term()}
+  def list_pod_metrics(conn) do
+    case do_list_pod_metrics(conn, "metrics.k8s.io/v1beta1") do
+      {:ok, _} = ok ->
+        ok
+
+      err_v1b ->
+        if metrics_version_missing?(err_v1b) do
+          do_list_pod_metrics(conn, "metrics.k8s.io/v1")
+        else
+          err_v1b
+        end
+    end
+  end
+
+  defp do_list_pod_metrics(conn, api_version) do
+    op = K8s.Client.list(api_version, "PodMetrics", namespace: :all)
+
+    case K8s.Client.run(conn, op) do
+      {:ok, %{"items" => items}} when is_list(items) ->
+        {:ok, items}
+
+      {:ok, body} when is_map(body) ->
+        {:ok, Map.get(body, "items", [])}
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
+  @doc """
+  Per-VM CPU (millicores) and RAM (bytes) currently used, attributed via the VM's
+  virt-launcher pod (summed across its containers). Returns `nil` for either value
+  when no matching pod or pod metrics are found.
+  """
+  @spec vm_resource_usage(map(), list(map()), list(map())) ::
+          %{cpu_millicores: non_neg_integer() | nil, mem_bytes: non_neg_integer() | nil}
+  def vm_resource_usage(vm, virt_launcher_pods, pod_metrics)
+      when is_list(virt_launcher_pods) and is_list(pod_metrics) do
+    case find_virt_launcher_pod(vm, virt_launcher_pods) do
+      nil ->
+        %{cpu_millicores: nil, mem_bytes: nil}
+
+      pod ->
+        ns = pod_ns(pod)
+        metrics = Enum.find(pod_metrics, &(pod_ns(&1) == ns and pod_name(&1) == pod_name(pod)))
+        sum_container_usage(metrics)
+    end
+  end
+
+  @doc """
+  Finds the virt-launcher pod owning a VM (matched via the `vm.kubevirt.io/name`
+  label, same namespace), or `nil` when the VM has no running pod.
+  """
+  @spec find_virt_launcher_pod(map(), list(map())) :: map() | nil
+  def find_virt_launcher_pod(vm, virt_launcher_pods) when is_list(virt_launcher_pods) do
+    ns = get_in(vm, ["metadata", "namespace"])
+    name = get_in(vm, ["metadata", "name"])
+
+    Enum.find(virt_launcher_pods, fn p ->
+      pod_ns(p) == ns and get_in(p, ["metadata", "labels", "vm.kubevirt.io/name"]) == name
+    end)
+  end
+
+  defp pod_ns(p), do: get_in(p, ["metadata", "namespace"])
+  defp pod_name(p), do: get_in(p, ["metadata", "name"])
+
+  defp sum_container_usage(nil), do: %{cpu_millicores: nil, mem_bytes: nil}
+
+  defp sum_container_usage(metrics) do
+    containers = Map.get(metrics, "containers") || []
+
+    if containers == [] do
+      %{cpu_millicores: nil, mem_bytes: nil}
+    else
+      {cpu, mem} =
+        Enum.reduce(containers, {0, 0}, fn c, {cpu_acc, mem_acc} ->
+          cpu_v = get_in(c, ["usage", "cpu"])
+          mem_v = get_in(c, ["usage", "memory"])
+          {cpu_acc + cpu_to_millicores(cpu_v || ""), mem_acc + quantity_to_bytes(mem_v || "")}
+        end)
+
+      %{cpu_millicores: cpu, mem_bytes: mem}
+    end
+  end
+
+  @doc """
   Builds cluster-wide usage fields: CPU %, memory %, and storage % (PVC / ephemeral fallback).
   """
   def usage_summary(nodes, node_metrics_items, pvcs)
@@ -257,9 +347,11 @@ defmodule KubevirtTools.ClusterMetrics do
 
   defp coerce_quantity(_), do: nil
 
-  defp quantity_to_bytes(n) when is_integer(n) and n >= 0, do: n
+  @doc "Parses a Kubernetes resource quantity (e.g. `\"64M\"`, `\"2Gi\"`) into bytes."
+  @spec quantity_to_bytes(term()) :: non_neg_integer()
+  def quantity_to_bytes(n) when is_integer(n) and n >= 0, do: n
 
-  defp quantity_to_bytes(s) when is_binary(s) do
+  def quantity_to_bytes(s) when is_binary(s) do
     s = String.trim(s)
 
     cond do
@@ -283,7 +375,7 @@ defmodule KubevirtTools.ClusterMetrics do
     end
   end
 
-  defp quantity_to_bytes(_), do: 0
+  def quantity_to_bytes(_), do: 0
 
   defp format_gib(bytes) when bytes >= 0 do
     gib = bytes / (1024 * 1024 * 1024)

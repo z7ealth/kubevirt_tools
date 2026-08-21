@@ -2,7 +2,7 @@
 # Installs KubeVirt Tools into a Kubernetes (or OpenShift) cluster.
 #
 # Usage:
-#   ./install.sh [-n NAMESPACE] [--openshift|--kubernetes]
+#   ./install.sh [-n NAMESPACE] [--openshift|--kubernetes] [--openshift-monitoring]
 #
 # Requires: kubectl (or oc) pointed at the target cluster/context.
 set -euo pipefail
@@ -10,15 +10,22 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NAMESPACE="kubevirt-tools"
 FORCE_MODE=""
+ENABLE_OPENSHIFT_MONITORING=""
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [-n NAMESPACE] [--openshift|--kubernetes]
+Usage: $(basename "$0") [-n NAMESPACE] [--openshift|--kubernetes] [--openshift-monitoring]
 
-  -n, --namespace NAME   Namespace to install into (default: kubevirt-tools)
-      --openshift        Force-apply the OpenShift Route
-      --kubernetes       Skip the OpenShift Route
-  -h, --help             Show this help
+  -n, --namespace NAME     Namespace to install into (default: kubevirt-tools)
+      --openshift          Force-apply the OpenShift Route
+      --kubernetes         Skip the OpenShift Route
+      --openshift-monitoring
+                           Also grant read access to OpenShift's built-in
+                           cluster-monitoring Prometheus (cluster-monitoring-view),
+                           so PROMETHEUS_URL can point at it for the VM history
+                           charts. Opt-in: grants extra cluster-wide read access,
+                           so it's not applied by default even on OpenShift.
+  -h, --help               Show this help
 EOF
 }
 
@@ -34,6 +41,10 @@ while [ $# -gt 0 ]; do
       ;;
     --kubernetes)
       FORCE_MODE="kubernetes"
+      shift
+      ;;
+    --openshift-monitoring)
+      ENABLE_OPENSHIFT_MONITORING="yes"
       shift
       ;;
     -h|--help)
@@ -87,6 +98,14 @@ if is_openshift; then
   apply route.yaml
 else
   echo "==> Skipping route.yaml (not an OpenShift cluster; use an Ingress instead)"
+fi
+
+if [ -n "$ENABLE_OPENSHIFT_MONITORING" ]; then
+  if is_openshift; then
+    apply openshift_monitoring_rolebinding.yaml
+  else
+    echo "==> Skipping openshift_monitoring_rolebinding.yaml (not an OpenShift cluster)"
+  fi
 fi
 
 echo "==> Waiting for the deployment to become available"

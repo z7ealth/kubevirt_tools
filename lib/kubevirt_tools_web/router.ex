@@ -39,6 +39,11 @@ defmodule KubevirtToolsWeb.Router do
       live "/login", LoginLive
       live "/welcome", WelcomeLive
       live "/dashboard", DashboardLive
+      live "/vms/:namespace/:name", VmShowLive
+      live "/networks/:namespace/:vm_name/:iface_name", NetworkShowLive
+      live "/disks/:namespace/:vm_name/:disk_name", DiskShowLive
+      live "/storage_classes/:name", StorageClassShowLive
+      live "/nodes/:name", NodeShowLive
     end
 
     get "/", PageController, :home
