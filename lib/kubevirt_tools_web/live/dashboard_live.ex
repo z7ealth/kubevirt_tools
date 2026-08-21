@@ -25,11 +25,21 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   # Per-tab column filters. Empty string means "All" (no filter applied).
   @default_filters %{
-    "vms" => %{"phase" => "", "node" => "", "agent" => ""},
-    "networks" => %{"binding" => "", "vmi_phase" => ""},
-    "disks" => %{"volume_kind" => "", "storage_class" => "", "pvc_phase" => ""},
-    "storage_classes" => %{"provisioner" => ""},
-    "nodes" => %{"ready" => "", "role" => ""}
+    "vms" => %{"search" => "", "phase" => "", "node" => "", "agent" => ""},
+    "networks" => %{"search" => "", "binding" => "", "vmi_phase" => ""},
+    "disks" => %{"search" => "", "volume_kind" => "", "storage_class" => "", "pvc_phase" => ""},
+    "storage_classes" => %{"search" => "", "provisioner" => ""},
+    "nodes" => %{"search" => "", "ready" => "", "role" => ""}
+  }
+
+  # Per-tab column sort. `nil` means "no active sort" (rows keep their
+  # natural/default order); a {field, direction} tuple overrides it.
+  @default_sort %{
+    "vms" => nil,
+    "networks" => nil,
+    "disks" => nil,
+    "storage_classes" => nil,
+    "nodes" => nil
   }
 
   @impl true
@@ -43,6 +53,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       |> assign(:active_tab, tab_atom_from_string(params["tab"], :dashboard))
       |> assign(:prometheus_live, nil)
       |> assign(:filters, @default_filters)
+      |> assign(:sort, @default_sort)
 
     socket =
       if connected?(socket) do
@@ -85,6 +96,18 @@ defmodule KubevirtToolsWeb.DashboardLive do
   def handle_event("clear_filters", %{"tab" => tab}, socket) do
     filters = Map.put(socket.assigns.filters, tab, Map.fetch!(@default_filters, tab))
     {:noreply, assign(socket, :filters, filters)}
+  end
+
+  @impl true
+  def handle_event("sort", %{"tab" => tab, "field" => field}, socket) do
+    next =
+      case Map.get(socket.assigns.sort, tab) do
+        {^field, :asc} -> {field, :desc}
+        {^field, :desc} -> nil
+        _ -> {field, :asc}
+      end
+
+    {:noreply, assign(socket, :sort, Map.put(socket.assigns.sort, tab, next))}
   end
 
   defp tab_atom_from_string(tab, default) do
@@ -453,6 +476,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                         virt_launcher_pods={List.wrap(data.virt_launcher_pods)}
                         pod_metrics={List.wrap(data.pod_metrics)}
                         filters={@filters["vms"]}
+                        sort={@sort["vms"]}
                         empty_label="No VirtualMachines found."
                         id_prefix="vm"
                       />
@@ -504,6 +528,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       vms={data.vms}
                       vmis={if(data.vmi_error, do: [], else: data.vmis)}
                       filters={@filters["networks"]}
+                      sort={@sort["networks"]}
                       id_prefix="vm-net"
                     />
                   <% end %>
@@ -540,6 +565,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       vms={data.vms}
                       pvcs={List.wrap(data.pvcs)}
                       filters={@filters["disks"]}
+                      sort={@sort["disks"]}
                       id_prefix="vm-disk"
                     />
                   <% end %>
@@ -575,6 +601,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       storage_classes={List.wrap(data.storage_classes)}
                       pvcs={List.wrap(data.pvcs)}
                       filters={@filters["storage_classes"]}
+                      sort={@sort["storage_classes"]}
                       id_prefix="storage-class"
                     />
                   <% end %>
@@ -620,6 +647,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       node_metrics={List.wrap(data.node_metrics)}
                       prometheus_node_detail={m.prometheus_node_detail}
                       filters={@filters["nodes"]}
+                      sort={@sort["nodes"]}
                       id_prefix="node"
                     />
                   <% end %>
@@ -807,6 +835,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   attr :tab, :string, required: true
   attr :filters, :map, required: true
+  attr :search_placeholder, :string, default: "Search by name…"
 
   attr :specs, :list,
     required: true,
@@ -817,16 +846,26 @@ defmodule KubevirtToolsWeb.DashboardLive do
     assigns = assign(assigns, :active?, active?)
 
     ~H"""
-    <div class="flex flex-wrap items-center gap-2">
-      <div :for={spec <- @specs} class="flex items-center gap-1.5">
-        <label class="text-xs text-base-content/55">{spec.label}</label>
-        <select
-          class="select select-xs select-bordered"
-          phx-change="set_filter"
+    <div class="flex flex-wrap items-center gap-x-5 gap-y-2 py-2.5">
+      <div class="flex items-center gap-2">
+        <.icon name="hero-magnifying-glass" class="size-4 text-base-content/40" />
+        <input
+          type="text"
+          value={Map.get(@filters, "search", "")}
+          placeholder={@search_placeholder}
+          phx-keyup="set_filter"
           phx-value-tab={@tab}
-          phx-value-field={spec.field}
+          phx-value-field="search"
+          phx-debounce="300"
           name="value"
-        >
+          class="input input-xs input-bordered w-44"
+        />
+      </div>
+      <form :for={spec <- @specs} class="flex items-center gap-2" phx-change="set_filter">
+        <label class="text-xs text-base-content/55 whitespace-nowrap">{spec.label}</label>
+        <input type="hidden" name="tab" value={@tab} />
+        <input type="hidden" name="field" value={spec.field} />
+        <select class="select select-xs select-bordered" name="value">
           <option value="" selected={Map.get(@filters, spec.field, "") == ""}>All</option>
           <option
             :for={opt <- spec.options}
@@ -836,7 +875,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
             {opt}
           </option>
         </select>
-      </div>
+      </form>
       <button
         :if={@active?}
         type="button"
@@ -849,6 +888,65 @@ defmodule KubevirtToolsWeb.DashboardLive do
     </div>
     """
   end
+
+  attr :tab, :string, required: true
+  attr :field, :string, required: true
+  attr :sort, :any, default: nil
+  attr :title, :string, default: nil
+  attr :class, :string, default: nil
+  slot :inner_block, required: true
+
+  defp sortable_th(assigns) do
+    direction =
+      case assigns.sort do
+        {field, dir} when field == assigns.field -> dir
+        _ -> nil
+      end
+
+    assigns = assign(assigns, :direction, direction)
+
+    ~H"""
+    <th
+      title={@title}
+      class={["cursor-pointer select-none hover:text-base-content transition-colors", @class]}
+      phx-click="sort"
+      phx-value-tab={@tab}
+      phx-value-field={@field}
+    >
+      <span class="inline-flex items-center gap-1">
+        {render_slot(@inner_block)}
+        <.icon
+          name={sort_icon_name(@direction)}
+          class={["size-3", @direction == nil && "opacity-30"]}
+        />
+      </span>
+    </th>
+    """
+  end
+
+  defp sort_icon_name(:asc), do: "hero-chevron-up"
+  defp sort_icon_name(:desc), do: "hero-chevron-down"
+  defp sort_icon_name(nil), do: "hero-chevron-up-down"
+
+  defp sort_rows(rows, nil, _field_funs), do: rows
+
+  defp sort_rows(rows, {field, dir}, field_funs) do
+    case Map.fetch(field_funs, field) do
+      {:ok, fun} -> Enum.sort_by(rows, fun, dir)
+      :error -> rows
+    end
+  end
+
+  # Node CPU/Mem % are pre-formatted strings like "45%" or "—" (unavailable).
+  # Parse the leading integer for a numeric sort; unavailable sorts lowest.
+  defp pct_sort_value(str) when is_binary(str) do
+    case Integer.parse(str) do
+      {n, _rest} -> n
+      :error -> -1
+    end
+  end
+
+  defp pct_sort_value(_), do: -1
 
   attr :label, :string, required: true
   attr :value, :any, required: true
@@ -1095,6 +1193,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :virt_launcher_pods, :list, default: []
   attr :pod_metrics, :list, default: []
   attr :filters, :map, default: %{}
+  attr :sort, :any, default: nil
   attr :empty_label, :string, required: true
   attr :id_prefix, :string, required: true
 
@@ -1108,7 +1207,20 @@ defmodule KubevirtToolsWeb.DashboardLive do
       )
 
     filters = assigns.filters
-    rows = Enum.filter(all_rows, &vm_row_matches_filters?(&1, filters))
+
+    rows =
+      all_rows
+      |> Enum.filter(&vm_row_matches_filters?(&1, filters))
+      |> sort_rows(assigns.sort, %{
+        "name" => & &1.name,
+        "phase" => & &1.phase,
+        "cpu" => &(&1.cpu_pct || -1),
+        "memory" => &(&1.mem_pct || -1),
+        "node" => & &1.node,
+        "ip" => & &1.ip,
+        "agent" => & &1.agent_connected?,
+        "created" => & &1.created
+      })
 
     assigns =
       assigns
@@ -1124,23 +1236,40 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
     ~H"""
     <div class="space-y-2">
-      <.table_filter_bar tab="vms" filters={@filters} specs={@filter_specs} />
+      <.table_filter_bar
+        tab="vms"
+        filters={@filters}
+        specs={@filter_specs}
+        search_placeholder="Search by name or IP…"
+      />
       <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
         <table class="table table-sm">
           <thead class="bg-base-200/60 text-base-content/80">
             <tr>
-              <th>Name</th>
-              <th>Phase</th>
-              <th title="Used / configured — used comes from metrics-server on the virt-launcher pod">
+              <.sortable_th tab="vms" field="name" sort={@sort}>Name</.sortable_th>
+              <.sortable_th tab="vms" field="phase" sort={@sort}>Phase</.sortable_th>
+              <.sortable_th
+                tab="vms"
+                field="cpu"
+                sort={@sort}
+                title="Used / configured — used comes from metrics-server on the virt-launcher pod"
+              >
                 CPU
-              </th>
-              <th title="Used / configured — used comes from metrics-server on the virt-launcher pod">
+              </.sortable_th>
+              <.sortable_th
+                tab="vms"
+                field="memory"
+                sort={@sort}
+                title="Used / configured — used comes from metrics-server on the virt-launcher pod"
+              >
                 Memory
-              </th>
-              <th>Node</th>
-              <th>IP</th>
-              <th title="QEMU guest agent connected">Agent</th>
-              <th>Created</th>
+              </.sortable_th>
+              <.sortable_th tab="vms" field="node" sort={@sort}>Node</.sortable_th>
+              <.sortable_th tab="vms" field="ip" sort={@sort}>IP</.sortable_th>
+              <.sortable_th tab="vms" field="agent" sort={@sort} title="QEMU guest agent connected">
+                Agent
+              </.sortable_th>
+              <.sortable_th tab="vms" field="created" sort={@sort}>Created</.sortable_th>
             </tr>
           </thead>
           <tbody>
@@ -1221,13 +1350,24 @@ defmodule KubevirtToolsWeb.DashboardLive do
   end
 
   defp vm_row_matches_filters?(row, filters) do
-    matches_field?(filters["phase"], row.phase) and
+    matches_search?(filters["search"], [row.name, row.ip]) and
+      matches_field?(filters["phase"], row.phase) and
       matches_field?(filters["node"], row.node) and
       matches_field?(filters["agent"], if(row.agent_connected?, do: "Running", else: "Not running"))
   end
 
   defp matches_field?("", _value), do: true
   defp matches_field?(filter, value), do: filter == value
+
+  defp matches_search?(nil, _values), do: true
+  defp matches_search?("", _values), do: true
+
+  defp matches_search?(term, values) when is_list(values) do
+    downcased = String.downcase(term)
+    Enum.any?(values, &String.contains?(String.downcase(to_string(&1)), downcased))
+  end
+
+  defp matches_search?(term, value), do: matches_search?(term, [value])
 
   defp distinct_present(rows, fun) do
     rows
@@ -1294,12 +1434,23 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :vms, :list, required: true
   attr :vmis, :list, default: []
   attr :filters, :map, default: %{}
+  attr :sort, :any, default: nil
   attr :id_prefix, :string, required: true
 
   defp virtual_machine_network_interfaces_table(assigns) do
     all_rows = virtual_machine_network_interface_rows(assigns.vms, List.wrap(assigns.vmis))
     filters = assigns.filters
-    rows = Enum.filter(all_rows, &network_row_matches_filters?(&1, filters))
+
+    rows =
+      all_rows
+      |> Enum.filter(&network_row_matches_filters?(&1, filters))
+      |> sort_rows(assigns.sort, %{
+        "vm" => & &1.vm_name,
+        "interface" => & &1.iface_name,
+        "binding" => & &1.binding,
+        "ips" => & &1.ips,
+        "vmi_phase" => & &1.vmi_phase
+      })
 
     assigns =
       assigns
@@ -1319,16 +1470,21 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
     ~H"""
     <div class="space-y-2">
-      <.table_filter_bar tab="networks" filters={@filters} specs={@filter_specs} />
+      <.table_filter_bar
+        tab="networks"
+        filters={@filters}
+        specs={@filter_specs}
+        search_placeholder="Search by VM name or IP…"
+      />
       <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
         <table class="table table-sm">
         <thead class="bg-base-200/60 text-base-content/80">
           <tr>
-            <th>VM</th>
-            <th>Interface</th>
-            <th>Binding</th>
-            <th>IP addresses</th>
-            <th>VMI phase</th>
+            <.sortable_th tab="networks" field="vm" sort={@sort}>VM</.sortable_th>
+            <.sortable_th tab="networks" field="interface" sort={@sort}>Interface</.sortable_th>
+            <.sortable_th tab="networks" field="binding" sort={@sort}>Binding</.sortable_th>
+            <.sortable_th tab="networks" field="ips" sort={@sort}>IP addresses</.sortable_th>
+            <.sortable_th tab="networks" field="vmi_phase" sort={@sort}>VMI phase</.sortable_th>
           </tr>
         </thead>
         <tbody>
@@ -1373,19 +1529,32 @@ defmodule KubevirtToolsWeb.DashboardLive do
   end
 
   defp network_row_matches_filters?(row, filters) do
-    matches_field?(filters["binding"], row.binding) and
+    matches_search?(filters["search"], [row.vm_name, row.ips]) and
+      matches_field?(filters["binding"], row.binding) and
       matches_field?(filters["vmi_phase"], row.vmi_phase)
   end
 
   attr :vms, :list, required: true
   attr :pvcs, :list, default: []
   attr :filters, :map, default: %{}
+  attr :sort, :any, default: nil
   attr :id_prefix, :string, required: true
 
   defp virtual_machine_disks_detail_table(assigns) do
     all_rows = virtual_machine_disk_detail_rows(assigns.vms, List.wrap(assigns.pvcs))
     filters = assigns.filters
-    rows = Enum.filter(all_rows, &disk_row_matches_filters?(&1, filters))
+
+    rows =
+      all_rows
+      |> Enum.filter(&disk_row_matches_filters?(&1, filters))
+      |> sort_rows(assigns.sort, %{
+        "vm" => & &1.vm_name,
+        "disk" => & &1.disk_name,
+        "volume_kind" => & &1.volume_kind,
+        "size" => & &1.size_gib,
+        "storage_class" => & &1.storage_class,
+        "pvc_phase" => & &1.pvc_phase
+      })
 
     assigns =
       assigns
@@ -1419,12 +1588,12 @@ defmodule KubevirtToolsWeb.DashboardLive do
         <table class="table table-sm">
           <thead class="bg-base-200/60 text-base-content/80">
             <tr>
-              <th>VM</th>
-              <th>Disk</th>
-              <th>Volume kind</th>
-              <th>Size</th>
-              <th>Storage class</th>
-              <th>PVC phase</th>
+              <.sortable_th tab="disks" field="vm" sort={@sort}>VM</.sortable_th>
+              <.sortable_th tab="disks" field="disk" sort={@sort}>Disk</.sortable_th>
+              <.sortable_th tab="disks" field="volume_kind" sort={@sort}>Volume kind</.sortable_th>
+              <.sortable_th tab="disks" field="size" sort={@sort}>Size</.sortable_th>
+              <.sortable_th tab="disks" field="storage_class" sort={@sort}>Storage class</.sortable_th>
+              <.sortable_th tab="disks" field="pvc_phase" sort={@sort}>PVC phase</.sortable_th>
             </tr>
           </thead>
           <tbody>
@@ -1463,7 +1632,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
   end
 
   defp disk_row_matches_filters?(row, filters) do
-    matches_field?(filters["volume_kind"], row.volume_kind) and
+    matches_search?(filters["search"], row.vm_name) and
+      matches_field?(filters["volume_kind"], row.volume_kind) and
       matches_field?(filters["storage_class"], row.storage_class) and
       matches_field?(filters["pvc_phase"], row.pvc_phase)
   end
@@ -1471,6 +1641,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :storage_classes, :list, required: true
   attr :pvcs, :list, required: true
   attr :filters, :map, default: %{}
+  attr :sort, :any, default: nil
   attr :id_prefix, :string, required: true
 
   defp storage_classes_table(assigns) do
@@ -1481,7 +1652,16 @@ defmodule KubevirtToolsWeb.DashboardLive do
     unset_count = Map.get(pvc_by_class, "", 0)
 
     filters = assigns.filters
-    rows = Enum.filter(all_rows, &storage_class_row_matches_filters?(&1, filters))
+
+    rows =
+      all_rows
+      |> Enum.filter(&storage_class_row_matches_filters?(&1, filters))
+      |> sort_rows(assigns.sort, %{
+        "name" => & &1.name,
+        "default" => & &1.default?,
+        "provisioner" => & &1.provisioner,
+        "pvcs" => & &1.pvc_count
+      })
 
     assigns =
       assigns
@@ -1519,10 +1699,19 @@ defmodule KubevirtToolsWeb.DashboardLive do
         <table class="table table-sm">
           <thead class="bg-base-200/60 text-base-content/80">
             <tr>
-              <th>Name</th>
-              <th>Default</th>
-              <th>Provisioner</th>
-              <th title="PVCs in the cluster using this storageClassName">PVCs</th>
+              <.sortable_th tab="storage_classes" field="name" sort={@sort}>Name</.sortable_th>
+              <.sortable_th tab="storage_classes" field="default" sort={@sort}>Default</.sortable_th>
+              <.sortable_th tab="storage_classes" field="provisioner" sort={@sort}>
+                Provisioner
+              </.sortable_th>
+              <.sortable_th
+                tab="storage_classes"
+                field="pvcs"
+                sort={@sort}
+                title="PVCs in the cluster using this storageClassName"
+              >
+                PVCs
+              </.sortable_th>
             </tr>
           </thead>
           <tbody>
@@ -1581,7 +1770,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
   end
 
   defp storage_class_row_matches_filters?(row, filters) do
-    matches_field?(filters["provisioner"], row.provisioner)
+    matches_search?(filters["search"], row.name) and
+      matches_field?(filters["provisioner"], row.provisioner)
   end
 
   attr :nodes, :list, required: true
@@ -1589,6 +1779,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :node_metrics, :list, default: []
   attr :prometheus_node_detail, :map, default: %{}
   attr :filters, :map, default: %{}
+  attr :sort, :any, default: nil
   attr :id_prefix, :string, required: true
 
   defp nodes_table(assigns) do
@@ -1601,7 +1792,18 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
     all_rows = kubernetes_nodes_table_rows(assigns.nodes, assigns.vmis, merged)
     filters = assigns.filters
-    rows = Enum.filter(all_rows, &node_row_matches_filters?(&1, filters))
+
+    rows =
+      all_rows
+      |> Enum.filter(&node_row_matches_filters?(&1, filters))
+      |> sort_rows(assigns.sort, %{
+        "name" => & &1.name,
+        "ready" => & &1.is_ready,
+        "role" => & &1.role,
+        "vmis" => & &1.vmi_count,
+        "cpu" => &pct_sort_value(&1.cpu_pct),
+        "mem" => &pct_sort_value(&1.mem_pct)
+      })
 
     assigns =
       assigns
@@ -1622,16 +1824,26 @@ defmodule KubevirtToolsWeb.DashboardLive do
         <table class="table table-sm">
           <thead class="bg-base-200/60 text-base-content/80">
             <tr>
-              <th>Name</th>
-              <th>Ready</th>
-              <th>Role</th>
-              <th>VMIs</th>
-              <th title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target">
+              <.sortable_th tab="nodes" field="name" sort={@sort}>Name</.sortable_th>
+              <.sortable_th tab="nodes" field="ready" sort={@sort}>Ready</.sortable_th>
+              <.sortable_th tab="nodes" field="role" sort={@sort}>Role</.sortable_th>
+              <.sortable_th tab="nodes" field="vmis" sort={@sort}>VMIs</.sortable_th>
+              <.sortable_th
+                tab="nodes"
+                field="cpu"
+                sort={@sort}
+                title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target"
+              >
                 CPU %
-              </th>
-              <th title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target">
+              </.sortable_th>
+              <.sortable_th
+                tab="nodes"
+                field="mem"
+                sort={@sort}
+                title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target"
+              >
                 Mem %
-              </th>
+              </.sortable_th>
             </tr>
           </thead>
           <tbody>
@@ -1674,7 +1886,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
   end
 
   defp node_row_matches_filters?(row, filters) do
-    matches_field?(filters["ready"], if(row.is_ready, do: "Yes", else: "No")) and
+    matches_search?(filters["search"], row.name) and
+      matches_field?(filters["ready"], if(row.is_ready, do: "Yes", else: "No")) and
       matches_field?(filters["role"], row.role)
   end
 

@@ -465,12 +465,10 @@ defmodule KubevirtToolsWeb.CoreComponents do
 
   def list(assigns) do
     ~H"""
-    <ul class="list">
-      <li :for={item <- @item} class="list-row">
-        <div class="list-col-grow">
-          <div class="font-bold">{item.title}</div>
-          <div>{render_slot(item)}</div>
-        </div>
+    <ul class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-3 list-none p-0 m-0">
+      <li :for={item <- @item} class="border-b border-base-300/60 pb-2">
+        <div class="font-bold">{item.title}</div>
+        <div>{render_slot(item)}</div>
       </li>
     </ul>
     """

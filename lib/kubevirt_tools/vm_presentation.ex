@@ -994,6 +994,7 @@ defmodule KubevirtTools.VmPresentation do
           volume_kind: vkind,
           source: vref,
           size: format_disk_size_display(gib),
+          size_gib: gib,
           storage_class: sc,
           pvc_phase: ph,
           serial: disk_device_serial(d),
@@ -1370,13 +1371,27 @@ defmodule KubevirtTools.VmPresentation do
     end
   end
 
+  @doc """
+  Node role(s), joined when a node carries more than one `node-role.kubernetes.io/*`
+  label (e.g. a control-plane node that's also untainted to run workloads shows
+  "control-plane, worker") — same convention `kubectl get nodes`'s ROLES column
+  uses. Falls back to "worker" when no such label is present at all.
+  """
   def kubernetes_node_role_label(node) do
     labels = get_in(node, ["metadata", "labels"]) || %{}
 
-    cond do
-      Map.has_key?(labels, "node-role.kubernetes.io/control-plane") -> "control-plane"
-      Map.has_key?(labels, "node-role.kubernetes.io/master") -> "control-plane"
-      true -> "worker"
+    roles =
+      labels
+      |> Map.keys()
+      |> Enum.filter(&String.starts_with?(&1, "node-role.kubernetes.io/"))
+      |> Enum.map(&String.replace_prefix(&1, "node-role.kubernetes.io/", ""))
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    case roles do
+      [] -> "worker"
+      _ -> Enum.join(roles, ", ")
     end
   end
 
