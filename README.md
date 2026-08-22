@@ -207,15 +207,7 @@ All optional — sensible defaults apply if unset. Every value is read live from
 
 ## Changelog
 
-### v0.2.0
-
-- **Simplified installation**: `deploy/k8s/install.sh` / `uninstall.sh` — no `mix` needed to install, just `kubectl`/`oc`. `SECRET_KEY_BASE` and `PROMETHEUS_URL` are now optional (auto-generated / defaulted).
-- **Detail pages** for every resource — VMs, Networks, Disks, Storage classes, Nodes. Click any dashboard row to open it; back links return to the correct tab.
-- **Real CPU/RAM usage** (used/total, color-coded by % — teal/amber/red) on the VM list, sourced from metrics-server on the virt-launcher pod.
-- **QEMU guest agent indicator** on the VM list (color-coded Running/Not running).
-- **Live CPU/memory history charts** on the VM detail page (last 30 min, requires Prometheus scraping cAdvisor).
-- **Auto-refresh** every 30s on the dashboard and VM detail page (manual refresh still available).
-- **Fixes**: in-cluster sign-in now works for custom-namespace installs (was hard-coded to one namespace); uploading a non-kubeconfig file at login no longer crashes the app; OpenShift on-prem TLS/CA issues and the KubeVirt-version-as-digest display issue are documented and handled.
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## Learn more
 
