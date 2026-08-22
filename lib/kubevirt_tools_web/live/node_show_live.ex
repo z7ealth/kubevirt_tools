@@ -7,9 +7,19 @@ defmodule KubevirtToolsWeb.NodeShowLive do
 
   alias KubevirtTools.ClusterInventory
   alias KubevirtTools.ClusterMetrics
+  alias KubevirtTools.DashboardCharts
   alias KubevirtTools.K8sConn
   alias KubevirtTools.K8sSafeError
   alias KubevirtTools.KubeVirt
+  alias KubevirtTools.PrometheusClient
+
+  # Cadence for the periodic full-page refresh and the Prometheus history
+  # re-query, configurable via POLL_INTERVAL_MS (shared with the dashboard's
+  # own auto-refresh and the VM show page).
+  defp poll_ms, do: KubevirtTools.EnvConfig.int("POLL_INTERVAL_MS", 60_000)
+  # Trailing window queried from Prometheus for the live usage charts.
+  @history_window_s 1800
+  @history_step_s 30
 
   @impl true
   def mount(%{"name" => name}, _session, socket) do
@@ -20,7 +30,24 @@ defmodule KubevirtToolsWeb.NodeShowLive do
       |> assign(:page_title, "Node: #{name}")
       |> assign(:name, name)
 
-    {:ok, assign_async(socket, :node_detail, fn -> load_node_detail(token, name) end)}
+    if connected?(socket), do: Process.send_after(self(), :poll_usage, poll_ms())
+
+    {:ok,
+     socket
+     |> assign_async(:node_detail, fn -> load_node_detail(token, name) end)
+     |> assign_async(:usage_history, fn -> load_usage_history(token, name) end)}
+  end
+
+  @impl true
+  def handle_info(:poll_usage, socket) do
+    Process.send_after(self(), :poll_usage, poll_ms())
+    token = socket.assigns.kubeconfig_token
+    name = socket.assigns.name
+
+    {:noreply,
+     socket
+     |> assign_async(:node_detail, fn -> load_node_detail(token, name) end)
+     |> assign_async(:usage_history, fn -> load_usage_history(token, name) end)}
   end
 
   # Metrics-server only here (no Prometheus fallback, unlike the dashboard's Nodes
@@ -56,6 +83,36 @@ defmodule KubevirtToolsWeb.NodeShowLive do
     case fun.(conn) do
       {:ok, items} -> {items, nil}
       {:error, reason} -> {[], reason}
+    end
+  end
+
+  # Runs independently of load_node_detail/2 (its own assign_async, own Task) so a
+  # slow or unreachable Prometheus never delays the rest of the page. Live usage
+  # charts require Prometheus scraping node_exporter (same metrics the dashboard's
+  # Nodes tab falls back to when metrics-server is unavailable) — any failure here
+  # (unreachable, no matching series) is encoded as {:error, reason} *inside* the
+  # ok payload so it never triggers the generic :failed slot.
+  defp load_usage_history(token, name) do
+    with {:ok, conn} <- K8sConn.from_token(token),
+         {:ok, nodes} <- ClusterInventory.list_nodes(conn) do
+      case Enum.find(nodes, &(get_in(&1, ["metadata", "name"]) == name)) do
+        nil ->
+          {:ok, %{usage_history: {:error, :not_found}}}
+
+        node ->
+          candidates = node_prometheus_match_labels(node)
+          now_s = System.system_time(:second)
+          start_s = now_s - @history_window_s
+
+          {:ok,
+           %{
+             usage_history:
+               PrometheusClient.node_usage_range(candidates, start_s, now_s, @history_step_s)
+           }}
+      end
+    else
+      :error -> {:ok, %{usage_history: {:error, :invalid_session}}}
+      {:error, reason} -> {:ok, %{usage_history: {:error, reason}}}
     end
   end
 
@@ -104,6 +161,7 @@ defmodule KubevirtToolsWeb.NodeShowLive do
             <div class="rounded-xl border border-base-300/70 bg-base-100 shadow-sm p-4">
               <.list>
                 <:item title="Role">{data.row.role}</:item>
+                <:item title="OS">{data.row.os_image}</:item>
                 <:item title="Scheduling">{data.row.scheduling}</:item>
                 <:item title="VMIs">{data.row.vmi_count}</:item>
                 <:item title="CPU %">{data.row.cpu_pct}</:item>
@@ -117,6 +175,48 @@ defmodule KubevirtToolsWeb.NodeShowLive do
                 <:item title="OS / arch">{data.row.os_arch}</:item>
                 <:item title="Container runtime">{data.row.runtime}</:item>
               </.list>
+            </div>
+
+            <%
+              overlay_message =
+                "Requires Prometheus scraping node_exporter — set PROMETHEUS_URL (see README)"
+
+              {cpu_points, mem_points, overlay} =
+                case @usage_history do
+                  %{ok?: true, result: {:ok, %{cpu_points: c, mem_points: m}}}
+                  when length(c) >= 2 ->
+                    {c, m, nil}
+
+                  %{ok?: true} ->
+                    {[], [], overlay_message}
+
+                  %{loading: l} when l not in [nil, false] ->
+                    {[], [], "Checking Prometheus…"}
+
+                  _ ->
+                    {[], [], overlay_message}
+                end
+            %>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+              <.apex_chart
+                id={"node-cpu-usage-chart-#{@name}"}
+                title={"CPU usage (last 30 min, refreshes every #{format_interval_label(poll_ms())})"}
+                height="150px"
+                opts={DashboardCharts.usage_area_chart(cpu_points, name: "CPU %")}
+                dependency_overlay={overlay}
+              />
+              <.apex_chart
+                id={"node-mem-usage-chart-#{@name}"}
+                title={"Memory usage (last 30 min, refreshes every #{format_interval_label(poll_ms())})"}
+                height="150px"
+                opts={
+                  DashboardCharts.usage_area_chart(mem_points,
+                    name: "Memory %",
+                    color: "var(--color-info)"
+                  )
+                }
+                dependency_overlay={overlay}
+              />
             </div>
 
             <div class="space-y-3">

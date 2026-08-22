@@ -131,6 +131,7 @@ defmodule KubevirtToolsWeb.ChartComponents do
       export default {
         mounted() {
           this._optsB64 = null
+          this._structuralJson = null
           this.chart = null
           this._resizeObserver = null
           this._layoutRaf = null
@@ -143,10 +144,8 @@ defmodule KubevirtToolsWeb.ChartComponents do
           this.scheduleLayout()
         },
         updated() {
-          const b64 = this.el.dataset.chartOptsB64
-          if (b64 !== this._optsB64) {
-            this.teardownChart()
-          }
+          // Deciding full-rebuild vs. smooth updateSeries needs the decoded
+          // opts (see syncChart) — don't teardown here, just re-sync.
           this.scheduleLayout()
           this.scheduleLayoutDeferred()
         },
@@ -227,6 +226,7 @@ defmodule KubevirtToolsWeb.ChartComponents do
         },
         teardownChart() {
           this._optsB64 = null
+          this._structuralJson = null
           if (this.chart) {
             this.chart.destroy()
             this.chart = null
@@ -252,8 +252,25 @@ defmodule KubevirtToolsWeb.ChartComponents do
             return
           }
 
+          // Only the series data changed (new poll, same chart shape/config) —
+          // animate the transition in place instead of destroying and
+          // re-rendering the whole chart, which flashes/redraws visibly.
+          const { series, ...structural } = opts
+          const structuralJson = JSON.stringify(structural)
+
+          if (this.chart && structuralJson === this._structuralJson) {
+            this._optsB64 = b64
+            this.chart.updateSeries(series, true)
+            refreshChartLayout(this.chart)
+            requestAnimationFrame(() => {
+              if (this.chart) refreshChartLayout(this.chart)
+            })
+            return
+          }
+
           this.teardownChart()
           this._optsB64 = b64
+          this._structuralJson = structuralJson
           this.chart = new ApexCharts(this.el, opts)
           const chart = this.chart
           const afterRender = () => {

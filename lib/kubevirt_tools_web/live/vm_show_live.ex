@@ -14,8 +14,9 @@ defmodule KubevirtToolsWeb.VmShowLive do
   alias KubevirtTools.PrometheusClient
 
   # Cadence for the periodic full-page refresh and the Prometheus history
-  # re-query, matching the dashboard's own auto-refresh interval.
-  @poll_ms 30_000
+  # re-query, configurable via POLL_INTERVAL_MS (shared with the dashboard's
+  # own auto-refresh).
+  defp poll_ms, do: KubevirtTools.EnvConfig.int("POLL_INTERVAL_MS", 60_000)
   # Trailing window queried from Prometheus for the live usage charts.
   @history_window_s 1800
   @history_step_s 30
@@ -30,7 +31,7 @@ defmodule KubevirtToolsWeb.VmShowLive do
       |> assign(:namespace, ns)
       |> assign(:name, name)
 
-    if connected?(socket), do: Process.send_after(self(), :poll_usage, @poll_ms)
+    if connected?(socket), do: Process.send_after(self(), :poll_usage, poll_ms())
 
     {:ok,
      socket
@@ -40,7 +41,7 @@ defmodule KubevirtToolsWeb.VmShowLive do
 
   @impl true
   def handle_info(:poll_usage, socket) do
-    Process.send_after(self(), :poll_usage, @poll_ms)
+    Process.send_after(self(), :poll_usage, poll_ms())
     token = socket.assigns.kubeconfig_token
     ns = socket.assigns.namespace
     name = socket.assigns.name
@@ -74,8 +75,7 @@ defmodule KubevirtToolsWeb.VmShowLive do
                vmi: vmi,
                usage: usage,
                network_rows: virtual_machine_network_interface_rows([vm], List.wrap(vmi)),
-               disk_rows: virtual_machine_disk_detail_rows([vm], pvcs),
-               snapshot_at: System.system_time(:millisecond)
+               disk_rows: virtual_machine_disk_detail_rows([vm], pvcs)
              }
            }}
       end
@@ -200,6 +200,7 @@ defmodule KubevirtToolsWeb.VmShowLive do
             <div class="rounded-xl border border-base-300/70 bg-base-100 shadow-sm p-4">
               <.list>
                 <:item title="Boot mode">{vm_boot_mode(data.vm)}</:item>
+                <:item title="OS">{vmi_os_display(data.vmi)}</:item>
                 <:item title="Cores">{cores}</:item>
                 <:item title="Sockets">{sockets}</:item>
                 <:item title="CPUs (guest)">{guest_cpu_total}</:item>
@@ -266,15 +267,15 @@ defmodule KubevirtToolsWeb.VmShowLive do
             %>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
               <.apex_chart
-                id={"vm-cpu-usage-chart-#{data.snapshot_at}"}
-                title="CPU usage (last 30 min, refreshes every 30s)"
+                id={"vm-cpu-usage-chart-#{@namespace}-#{@name}"}
+                title={"CPU usage (last 30 min, refreshes every #{format_interval_label(poll_ms())})"}
                 height="150px"
                 opts={DashboardCharts.usage_area_chart(cpu_points, name: "CPU %")}
                 dependency_overlay={overlay}
               />
               <.apex_chart
-                id={"vm-mem-usage-chart-#{data.snapshot_at}"}
-                title="Memory usage (last 30 min, refreshes every 30s)"
+                id={"vm-mem-usage-chart-#{@namespace}-#{@name}"}
+                title={"Memory usage (last 30 min, refreshes every #{format_interval_label(poll_ms())})"}
                 height="150px"
                 opts={
                   DashboardCharts.usage_area_chart(mem_points,

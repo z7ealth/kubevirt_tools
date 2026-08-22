@@ -4,9 +4,9 @@ defmodule KubevirtTools.PrometheusMetricsServer do
   `prometheus:metrics`. LiveViews subscribe to refresh Prometheus-driven tiles and charts
   without reloading the full Kubernetes snapshot.
 
-  Full snapshots run every `:prometheus_poll_interval_ms` (heavy: PromQL + node detail).
+  Full snapshots run every `PROMETHEUS_POLL_INTERVAL_MS` (heavy: PromQL + node detail).
   After a successful snapshot, lightweight `/-/healthy` checks run every
-  `:prometheus_health_interval_ms` so the dashboard can drop "Connected" quickly if Prometheus
+  `PROMETHEUS_HEALTH_INTERVAL_MS` so the dashboard can drop "Connected" quickly if Prometheus
   stops responding.
 
   Timers are tracked so `poll_now/0` can run an immediate fetch (e.g. after Prometheus
@@ -143,10 +143,10 @@ defmodule KubevirtTools.PrometheusMetricsServer do
   end
 
   defp poll_interval_ms do
-    Application.get_env(:kubevirt_tools, :prometheus_poll_interval_ms, 300_000)
+    KubevirtTools.EnvConfig.int("PROMETHEUS_POLL_INTERVAL_MS", 60_000)
   end
 
   defp health_interval_ms do
-    Application.get_env(:kubevirt_tools, :prometheus_health_interval_ms, 60_000)
+    KubevirtTools.EnvConfig.int("PROMETHEUS_HEALTH_INTERVAL_MS", 60_000)
   end
 end

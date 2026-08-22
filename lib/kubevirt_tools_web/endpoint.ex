@@ -1,11 +1,13 @@
 defmodule KubevirtToolsWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :kubevirt_tools
 
-  @max_multipart_body_bytes Application.compile_env(
-                              :kubevirt_tools,
-                              :kubeconfig_max_bytes,
-                              512_000
-                            )
+  # Plug.Parsers' `:length` is fixed at compile time (Plug.Builder builds the
+  # pipeline once, at compile time — it can't read the `KUBECONFIG_MAX_BYTES`
+  # env var, which is only known at pod boot). Kept as a generous fixed
+  # ceiling; KubevirtTools.KubeconfigVerify.max_bytes() does the actual,
+  # runtime-configurable rejection (with a friendly error) once the body is
+  # already parsed.
+  @max_multipart_body_bytes 8_000_000
 
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.

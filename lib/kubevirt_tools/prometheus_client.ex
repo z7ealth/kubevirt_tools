@@ -1,10 +1,15 @@
 defmodule KubevirtTools.PrometheusClient do
   @moduledoc false
 
+  alias KubevirtTools.EnvConfig
   alias KubevirtTools.PrometheusSetup
 
   @default_sa_token_path "/var/run/secrets/kubernetes.io/serviceaccount/token"
   @insecure_env_var "PROMETHEUS_INSECURE_SKIP_TLS_VERIFY"
+
+  # Timeout for each Prometheus HTTP client call (milliseconds).
+  # Configurable via `PROMETHEUS_CLIENT_TIMEOUT_MS`.
+  defp client_timeout_ms, do: EnvConfig.int("PROMETHEUS_CLIENT_TIMEOUT_MS", 5_000)
 
   # Attaches the pod's own in-cluster service-account token (when mounted) as a
   # Bearer credential on every Prometheus request — needed to reach endpoints
@@ -71,7 +76,7 @@ defmodule KubevirtTools.PrometheusClient do
   @spec health_ping() :: :ok | {:error, String.t()}
   def health_ping do
     base = PrometheusSetup.base_url() |> String.trim_trailing("/")
-    timeout = Application.get_env(:kubevirt_tools, :prometheus_client_timeout_ms, 5_000)
+    timeout = client_timeout_ms()
     url = base <> "/-/healthy"
 
     case Req.get(url, Keyword.merge(auth_and_tls_opts(), receive_timeout: timeout)) do
@@ -113,7 +118,7 @@ defmodule KubevirtTools.PrometheusClient do
           | {:error, term()}
   def vm_usage_range(pod_namespace, pod_name, vcpu_count, mem_total_bytes, start_s, end_s, step_s) do
     base = PrometheusSetup.base_url() |> String.trim_trailing("/")
-    timeout = Application.get_env(:kubevirt_tools, :prometheus_client_timeout_ms, 5_000)
+    timeout = client_timeout_ms()
 
     selector =
       "namespace=\"#{pod_namespace}\", pod=\"#{pod_name}\", container!=\"\", container!=\"POD\""
@@ -129,6 +134,88 @@ defmodule KubevirtTools.PrometheusClient do
       {:ok, %{cpu_points: cpu_points, mem_points: mem_points}}
     else
       {:error, reason} -> {:error, format_error(reason)}
+    end
+  end
+
+  @doc """
+  Range-queries a single Kubernetes Node's CPU% and memory% history from standard
+  node_exporter metrics (`node_cpu_seconds_total`, `node_memory_MemAvailable_bytes`
+  with a `node_memory_MemFree_bytes` fallback) — the same formulas as the
+  dashboard's Nodes tab Prometheus fallback, just Prometheus's stored history
+  instead of an instant snapshot.
+
+  `match_candidates` is the list of strings that could appear in the node_exporter
+  target's Prometheus `instance` label for this node (name, internal/external IPs,
+  hostname) — see `KubevirtTools.VmPresentation.node_prometheus_match_labels/1`.
+  Matched via regex since `instance` usually carries a `:port` suffix.
+  """
+  @spec node_usage_range([String.t()], integer(), integer(), pos_integer()) ::
+          {:ok, %{cpu_points: list({integer(), float()}), mem_points: list({integer(), float()})}}
+          | {:error, term()}
+  def node_usage_range(match_candidates, start_s, end_s, step_s) when is_list(match_candidates) do
+    base = PrometheusSetup.base_url() |> String.trim_trailing("/")
+    timeout = client_timeout_ms()
+    selector = node_instance_selector(match_candidates)
+
+    cpu_promql = """
+    100 * (
+      1 -
+      sum(rate(node_cpu_seconds_total{mode="idle", instance=~"#{selector}"}[5m]))
+      /
+      clamp_min(sum(rate(node_cpu_seconds_total{instance=~"#{selector}"}[5m])), 0.000001)
+    )
+    """
+
+    mem_avail_promql =
+      "100 * (1 - (node_memory_MemAvailable_bytes{instance=~\"#{selector}\"} / node_memory_MemTotal_bytes{instance=~\"#{selector}\"}))"
+
+    mem_free_promql =
+      "100 * (1 - (node_memory_MemFree_bytes{instance=~\"#{selector}\"} / node_memory_MemTotal_bytes{instance=~\"#{selector}\"}))"
+
+    with {:ok, cpu_points} <- run_range_query(base, cpu_promql, start_s, end_s, step_s, timeout),
+         {:ok, mem_points} <-
+           run_range_query_with_fallback(
+             base,
+             mem_avail_promql,
+             mem_free_promql,
+             start_s,
+             end_s,
+             step_s,
+             timeout
+           ) do
+      {:ok, %{cpu_points: cpu_points, mem_points: mem_points}}
+    else
+      {:error, reason} -> {:error, format_error(reason)}
+    end
+  end
+
+  defp node_instance_selector([]), do: "$^"
+
+  defp node_instance_selector(candidates) do
+    candidates
+    |> Enum.map(&re2_escape/1)
+    |> Enum.join("|")
+    |> then(&"(#{&1})(:.*)?")
+  end
+
+  # The regex is embedded in a PromQL *string literal* (`instance=~"..."`), which
+  # itself unescapes backslash sequences before RE2 ever sees the pattern — so a
+  # literal backslash needs writing as `\\` here for RE2 to receive a single `\`.
+  # Elixir's Regex.escape/1 also escapes `-` as `\-`, which isn't a valid PromQL
+  # string escape at all; `-` is never special in regex outside a character
+  # class, so it's left alone.
+  @re2_special ["\\", ".", "+", "*", "?", "(", ")", "|", "[", "]", "{", "}", "^", "$"]
+  defp re2_escape(s) when is_binary(s) do
+    s
+    |> String.graphemes()
+    |> Enum.map(fn ch -> if ch in @re2_special, do: "\\\\" <> ch, else: ch end)
+    |> Enum.join()
+  end
+
+  defp run_range_query_with_fallback(base, primary, fallback, start_s, end_s, step_s, timeout) do
+    case run_range_query(base, primary, start_s, end_s, step_s, timeout) do
+      {:ok, []} -> run_range_query(base, fallback, start_s, end_s, step_s, timeout)
+      other -> other
     end
   end
 
@@ -176,7 +263,7 @@ defmodule KubevirtTools.PrometheusClient do
   @spec snapshot() :: {:ok, map()} | {:error, String.t()}
   def snapshot do
     base = PrometheusSetup.base_url() |> String.trim_trailing("/")
-    timeout = Application.get_env(:kubevirt_tools, :prometheus_client_timeout_ms, 5_000)
+    timeout = client_timeout_ms()
 
     case query_sum_up(base, timeout) do
       {:ok, sum_up} ->

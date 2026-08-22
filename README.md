@@ -164,6 +164,8 @@ The release must be built on an OS **compatible with** the machine where you run
 | `PROMETHEUS_INSECURE_SKIP_TLS_VERIFY` | No | Unset (verify TLS) | Same idea as `KUBERNETES_INSECURE_SKIP_TLS_VERIFY` below, but for `PROMETHEUS_URL` specifically (separate client, separate cert trust). Needed e.g. for OpenShift's cluster-monitoring Prometheus, which serves a service-ca-signed certificate. |
 | `KUBERNETES_INSECURE_SKIP_TLS_VERIFY` | No | Unset (verify TLS) | If set to a truthy value (`true`, `1`, `yes`, `on`, case-insensitive), the app’s Kubernetes clients skip TLS certificate verification for **in-cluster** service-account connections and merge with kubeconfig mode. When unset, kubeconfig uploads still follow each context’s `insecure-skip-tls-verify` flag. Use only when appropriate (e.g. lab clusters with self-signed CAs). |
 
+Timeouts, upload limits, and Prometheus poll intervals are also configurable via env vars — see **Tuning (timeouts, limits, poll intervals)** below.
+
 ### Setting PHX_HOST
 
 `PHX_HOST` isn't just cosmetic: Phoenix's default LiveView origin check compares the browser's `Origin` header against this value, so if it doesn't match the hostname in the address bar, the page loads but the dashboard's WebSocket connection is refused (it'll look "stuck"/disconnected). Set it to whatever hostname you actually type into the browser to reach the app:
@@ -188,17 +190,18 @@ To enable, you have two options:
 - **Your own Prometheus** (works on both Kubernetes and OpenShift) — deploy one (e.g. `kube-prometheus-stack`) so it scrapes kubelet/cAdvisor, then set `PROMETHEUS_URL` to its address. No auth, no extra RBAC needed.
 - **OpenShift's built-in cluster-monitoring Prometheus** — point `PROMETHEUS_URL` at `https://prometheus-k8s.openshift-monitoring.svc.cluster.local:9091` (base URL only, no `/api` suffix). See **Kubernetes vs OpenShift** below — it needs both the RBAC `install.sh` already applies automatically on OpenShift, and `PROMETHEUS_INSECURE_SKIP_TLS_VERIFY=true`.
 
-### Application config (`config :kubevirt_tools, …`)
+### Tuning (timeouts, limits, poll intervals)
 
-The following are **not** environment variables today; they live in `config/config.exs` (and can be overridden in `config/runtime.exs`, `config/dev.exs`, or `config/prod.exs` for your deployment). Values below are the defaults from `config/config.exs`.
+All optional — sensible defaults apply if unset. Every value is read live from the environment (no rebuild needed, just restart the pod after changing the Secret).
 
 | Key | Default | Purpose |
 |-----|---------|---------|
-| `:kubeconfig_max_bytes` | `512_000` | Maximum kubeconfig upload size (bytes). |
-| `:kubeconfig_connect_timeout_ms` | `12_000` | Timeout for the Kubernetes API reachability check at sign-in. |
-| `:prometheus_client_timeout_ms` | `5_000` | Timeout for each Prometheus HTTP client call. |
-| `:prometheus_poll_interval_ms` | `300_000` | Interval between **full** Prometheus snapshots (PromQL + node metrics) pushed to the dashboard. |
-| `:prometheus_health_interval_ms` | `60_000` | After a successful snapshot, how often to call Prometheus **`/-/healthy`** so the UI drops “Connected” quickly if the server stops responding. |
+| `POLL_INTERVAL_MS` | `60000` | Global refresh interval for Kubernetes-backed data: the dashboard's auto-refresh (all tabs) and the VM show page's full-page + usage-chart refresh. Both UI hints ("Also auto-refreshes every…", chart titles) reflect this value automatically. |
+| `KUBECONFIG_MAX_BYTES` | `512000` | Maximum kubeconfig upload size (bytes). Hard ceiling: 8000000 (8MB) — the HTTP body-parser limit is fixed at compile time and can't be raised past that via env var. |
+| `KUBECONFIG_CONNECT_TIMEOUT_MS` | `12000` | Timeout for the Kubernetes API reachability check at sign-in. |
+| `PROMETHEUS_CLIENT_TIMEOUT_MS` | `5000` | Timeout for each Prometheus HTTP client call. |
+| `PROMETHEUS_POLL_INTERVAL_MS` | `60000` | Interval between **full** Prometheus snapshots (PromQL + node metrics) pushed to the dashboard. Independent of `POLL_INTERVAL_MS` — this one is specifically for the Prometheus-backed data path. |
+| `PROMETHEUS_HEALTH_INTERVAL_MS` | `60000` | After a successful snapshot, how often to call Prometheus **`/-/healthy`** so the UI drops “Connected” quickly if the server stops responding. |
 
 ---
 

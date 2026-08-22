@@ -596,9 +596,29 @@ defmodule KubevirtTools.VmPresentation do
         node: if(vmi, do: vmi_scheduling_node_name(vmi), else: "—"),
         ip: if(vmi, do: vmi_primary_ip(vmi), else: "—"),
         agent_connected?: vmi_agent_connected?(vmi),
+        os: vmi_os_display(vmi),
         created: vm_meta(vm, :created)
       }
     end)
+  end
+
+  @doc """
+  Guest-reported OS, e.g. "Ubuntu 26.04 LTS" — from the VMI's
+  `status.guestOSInfo` (populated by the in-guest qemu-guest-agent, same
+  source `vmi_agent_connected?/1` checks). "—" when the VMI is missing, the
+  agent hasn't reported yet, or the guest doesn't run one.
+  """
+  @spec vmi_os_display(map() | nil) :: String.t()
+  def vmi_os_display(nil), do: "—"
+
+  def vmi_os_display(vmi) do
+    os = get_in(vmi, ["status", "guestOSInfo"]) || %{}
+
+    cond do
+      is_binary(os["prettyName"]) and os["prettyName"] != "" -> os["prettyName"]
+      is_binary(os["name"]) and os["name"] != "" -> os["name"]
+      true -> "—"
+    end
   end
 
   defp format_bytes_short(bytes) when is_integer(bytes) and bytes >= 0 do
@@ -1339,8 +1359,23 @@ defmodule KubevirtTools.VmPresentation do
       pods_alloc: format_cell(get_in(node, ["status", "allocatable", "pods"])),
       kubelet: format_cell(ni["kubeletVersion"]),
       os_arch: os_arch,
+      os_image: node_os_image_display(ni),
       runtime: runtime
     }
+  end
+
+  @doc """
+  Node OS image, e.g. "Debian GNU/Linux 13 (trixie)" or "Red Hat Enterprise
+  Linux CoreOS 415.92.202307260553-0 (Ootpa)" — from `status.nodeInfo.osImage`.
+  Much more identifying than `operatingSystem` (always just "linux"); truncated
+  since some distros' strings run long.
+  """
+  @spec node_os_image_display(map()) :: String.t()
+  def node_os_image_display(node_info) when is_map(node_info) do
+    case node_info["osImage"] do
+      s when is_binary(s) and s != "" -> String.slice(s, 0, 60)
+      _ -> "—"
+    end
   end
 
   def kubernetes_node_scheduling_label(node) do
@@ -1408,4 +1443,18 @@ defmodule KubevirtTools.VmPresentation do
   def format_cell(""), do: "—"
   def format_cell(val) when is_boolean(val), do: if(val, do: "true", else: "false")
   def format_cell(val), do: to_string(val)
+
+  @doc """
+  Human-readable poll interval for UI hints (e.g. "10s", "90s", "5min") — used
+  so displayed refresh-rate text always matches the actual configured interval
+  instead of a hardcoded string.
+  """
+  @spec format_interval_label(pos_integer()) :: String.t()
+  def format_interval_label(ms) when is_integer(ms) and ms > 0 and rem(ms, 60_000) == 0 do
+    "#{div(ms, 60_000)}min"
+  end
+
+  def format_interval_label(ms) when is_integer(ms) and ms > 0 do
+    "#{div(ms, 1000)}s"
+  end
 end

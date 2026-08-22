@@ -10,19 +10,10 @@ import Config
 config :kubevirt_tools,
   generators: [timestamp_type: :utc_datetime]
 
-# Kubeconfig upload: max file size (bytes) and API reachability check at sign-in.
-config :kubevirt_tools, :kubeconfig_max_bytes, 512_000
-config :kubevirt_tools, :kubeconfig_connect_timeout_ms, 12_000
-
-# Instant-query timeout when calling the Prometheus HTTP API from the dashboard.
-config :kubevirt_tools, :prometheus_client_timeout_ms, 5_000
-
-# How often `PrometheusMetricsServer` runs a full Prometheus snapshot (charts, node metrics, etc.).
-config :kubevirt_tools, :prometheus_poll_interval_ms, 300_000
-
-# When the last snapshot succeeded, lightweight `/-/healthy` checks this often so the UI flips off
-# "Connected" quickly if Prometheus goes away (full snapshot stays on the interval above).
-config :kubevirt_tools, :prometheus_health_interval_ms, 60_000
+# Kubeconfig upload size/timeout, Prometheus client timeout, and Prometheus poll
+# intervals are all read directly from env vars at call time (see
+# KubevirtTools.EnvConfig, KubeconfigVerify, PrometheusClient, PrometheusMetricsServer)
+# — no compile-time config needed here. See README's environment variable table.
 
 # Configure the endpoint
 config :kubevirt_tools, KubevirtToolsWeb.Endpoint,

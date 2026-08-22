@@ -1,21 +1,23 @@
 defmodule KubevirtTools.KubeconfigVerify do
   @moduledoc false
 
+  alias KubevirtTools.EnvConfig
   alias KubevirtTools.K8sConn
   alias KubevirtTools.K8sSafeError
 
   @doc """
-  Maximum kubeconfig file size (bytes). Configurable via `:kubeconfig_max_bytes`.
+  Maximum kubeconfig file size (bytes). Configurable via `KUBECONFIG_MAX_BYTES`.
   """
   def max_bytes do
-    Application.get_env(:kubevirt_tools, :kubeconfig_max_bytes, 512_000)
+    EnvConfig.int("KUBECONFIG_MAX_BYTES", 512_000)
   end
 
   @doc """
   Timeout for the post-parse API reachability check (milliseconds).
+  Configurable via `KUBECONFIG_CONNECT_TIMEOUT_MS`.
   """
   def connect_timeout_ms do
-    Application.get_env(:kubevirt_tools, :kubeconfig_connect_timeout_ms, 12_000)
+    EnvConfig.int("KUBECONFIG_CONNECT_TIMEOUT_MS", 12_000)
   end
 
   @spec validate_upload(binary()) :: :ok | {:error, String.t()}

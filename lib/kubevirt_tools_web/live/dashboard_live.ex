@@ -21,15 +21,16 @@ defmodule KubevirtToolsWeb.DashboardLive do
   import VmPresentation
 
   @cluster_usage_prometheus_hint "Prometheus not detected, either install it or set PROMETHEUS_URL to where its running"
-  @auto_refresh_ms 30_000
+
+  defp auto_refresh_ms, do: KubevirtTools.EnvConfig.int("POLL_INTERVAL_MS", 60_000)
 
   # Per-tab column filters. Empty string means "All" (no filter applied).
   @default_filters %{
-    "vms" => %{"search" => "", "phase" => "", "node" => "", "agent" => ""},
+    "vms" => %{"search" => "", "phase" => "", "node" => "", "agent" => "", "os" => ""},
     "networks" => %{"search" => "", "binding" => "", "vmi_phase" => ""},
     "disks" => %{"search" => "", "volume_kind" => "", "storage_class" => "", "pvc_phase" => ""},
     "storage_classes" => %{"search" => "", "provisioner" => ""},
-    "nodes" => %{"search" => "", "ready" => "", "role" => ""}
+    "nodes" => %{"search" => "", "ready" => "", "role" => "", "os" => ""}
   }
 
   # Per-tab column sort. `nil` means "no active sort" (rows keep their
@@ -58,7 +59,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     socket =
       if connected?(socket) do
         Phoenix.PubSub.subscribe(KubevirtTools.PubSub, PrometheusMetricsServer.topic())
-        Process.send_after(self(), :auto_refresh, @auto_refresh_ms)
+        Process.send_after(self(), :auto_refresh, auto_refresh_ms())
 
         assign(socket, :prometheus_live, PrometheusMetricsServer.get_latest())
       else
@@ -125,7 +126,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   @impl true
   def handle_info(:auto_refresh, socket) do
-    Process.send_after(self(), :auto_refresh, @auto_refresh_ms)
+    Process.send_after(self(), :auto_refresh, auto_refresh_ms())
     token = socket.assigns.kubeconfig_token
 
     {:noreply, assign_async(socket, :kubevirt, fn -> load_kubevirt(token) end)}
@@ -175,7 +176,6 @@ defmodule KubevirtToolsWeb.DashboardLive do
             </:failed>
 
             <% m = metrics(data, @prometheus_live) %>
-            <% snap = to_string(data.snapshot_at) %>
             <div class="flex flex-col gap-4 pb-3 lg:flex-row lg:items-center lg:justify-between">
               <div class="min-w-0">
                 <p class="text-xs font-medium uppercase tracking-wider text-primary/90">Overview</p>
@@ -211,7 +211,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                   phx-click="refresh"
                   id="dashboard-refresh"
                   class="btn btn-outline btn-sm gap-2"
-                  title="Also auto-refreshes every 30s"
+                  title={"Also auto-refreshes every #{format_interval_label(auto_refresh_ms())}"}
                 >
                   <.icon name="hero-arrow-path" class="size-4" /> Refresh
                 </button>
@@ -318,21 +318,21 @@ defmodule KubevirtToolsWeb.DashboardLive do
                   <div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 md:gap-4 2xl:gap-5 min-w-0">
                     <.apex_chart
                       class="min-w-0"
-                      id={"chart-vm-status-#{snap}"}
+                      id="chart-vm-status"
                       title="VMs by status"
                       height="200px"
                       opts={DashboardCharts.vm_status_donut(m.running, m.stopped, m.other_vm)}
                     />
                     <.apex_chart
                       class="min-w-0 max-h-[min(85vh,720px)] overflow-y-auto"
-                      id={"chart-vm-per-node-#{snap}"}
+                      id="chart-vm-per-node"
                       title="VMIs per node"
                       height={"#{m.node_resource_chart_height_px}px"}
                       opts={DashboardCharts.vms_per_node_bar(m.node_labels, m.node_vm_counts)}
                     />
                     <.apex_chart
                       class="min-w-0 max-h-[min(85vh,720px)] overflow-y-auto"
-                      id={"chart-guest-cpu-node-#{snap}"}
+                      id="chart-guest-cpu-node"
                       title="Guest CPUs per node (VMIs)"
                       height={"#{m.node_resource_chart_height_px}px"}
                       opts={
@@ -346,7 +346,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     />
                     <.apex_chart
                       class="min-w-0 max-h-[min(85vh,720px)] overflow-y-auto"
-                      id={"chart-mem-node-#{snap}"}
+                      id="chart-mem-node"
                       title="Memory per node (MiB, guest)"
                       height={"#{m.node_resource_chart_height_px}px"}
                       opts={
@@ -360,7 +360,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     />
                     <.apex_chart
                       class="min-w-0"
-                      id={"chart-nodes-scheduling-#{snap}"}
+                      id="chart-nodes-scheduling"
                       title="Cluster nodes (scheduling)"
                       height="200px"
                       opts={
@@ -373,7 +373,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     />
                     <.apex_chart
                       class="min-w-0"
-                      id={"chart-pvc-class-#{snap}"}
+                      id="chart-pvc-class"
                       title="PVCs per storage class"
                       height="200px"
                       opts={
@@ -385,7 +385,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                   <div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 md:gap-4 2xl:gap-5 min-w-0">
                     <.apex_chart
                       class="min-w-0"
-                      id={"chart-pvc-status-#{snap}"}
+                      id="chart-pvc-status"
                       title="PVC status"
                       height="200px"
                       opts={
@@ -400,7 +400,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     <%= if m.node_load_from_prometheus? do %>
                       <.apex_chart
                         class="min-w-0 max-h-[min(85vh,720px)] overflow-y-auto"
-                        id={"chart-node-load-#{m.prom_chart_rev}"}
+                        id="chart-node-load"
                         title="Node CPU by utilization (Prometheus)"
                         height={"#{m.node_load_chart_height_px}px"}
                         opts={
@@ -411,11 +411,11 @@ defmodule KubevirtToolsWeb.DashboardLive do
                         }
                       />
                     <% else %>
-                      <.node_load_chart_placeholder id={"node-load-chart-placeholder-#{snap}"} />
+                      <.node_load_chart_placeholder id="node-load-chart-placeholder" />
                     <% end %>
                     <.apex_chart
                       class="min-w-0"
-                      id={"chart-health-#{snap}"}
+                      id="chart-health"
                       title="VMI phases"
                       height="200px"
                       opts={
@@ -861,7 +861,12 @@ defmodule KubevirtToolsWeb.DashboardLive do
           class="input input-xs input-bordered w-44"
         />
       </div>
-      <form :for={spec <- @specs} class="flex items-center gap-2" phx-change="set_filter">
+      <form
+        :for={spec <- @specs}
+        id={"filter-form-#{@tab}-#{spec.field}"}
+        class="flex items-center gap-2"
+        phx-change="set_filter"
+      >
         <label class="text-xs text-base-content/55 whitespace-nowrap">{spec.label}</label>
         <input type="hidden" name="tab" value={@tab} />
         <input type="hidden" name="field" value={spec.field} />
@@ -1219,6 +1224,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
         "node" => & &1.node,
         "ip" => & &1.ip,
         "agent" => & &1.agent_connected?,
+        "os" => & &1.os,
         "created" => & &1.created
       })
 
@@ -1230,7 +1236,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
         [
           %{field: "phase", label: "Phase", options: distinct_present(all_rows, & &1.phase)},
           %{field: "node", label: "Node", options: distinct_present(all_rows, & &1.node)},
-          %{field: "agent", label: "Agent", options: ["Running", "Not running"]}
+          %{field: "agent", label: "Agent", options: ["Running", "Not running"]},
+          %{field: "os", label: "OS", options: distinct_present(all_rows, & &1.os)}
         ]
       )
 
@@ -1269,12 +1276,15 @@ defmodule KubevirtToolsWeb.DashboardLive do
               <.sortable_th tab="vms" field="agent" sort={@sort} title="QEMU guest agent connected">
                 Agent
               </.sortable_th>
+              <.sortable_th tab="vms" field="os" sort={@sort} title="Guest-reported OS (qemu-guest-agent)">
+                OS
+              </.sortable_th>
               <.sortable_th tab="vms" field="created" sort={@sort}>Created</.sortable_th>
             </tr>
           </thead>
           <tbody>
             <tr :if={@rows == []}>
-              <td colspan="8" class="text-center text-base-content/50 py-8">
+              <td colspan="9" class="text-center text-base-content/50 py-8">
                 {if(@items == [], do: @empty_label, else: "No VMs match the current filters.")}
               </td>
             </tr>
@@ -1339,6 +1349,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     Not running
                   </span>
                 </td>
+                <td class="text-xs text-base-content/80 max-w-[10rem] truncate" title={row.os}>
+                  {row.os}
+                </td>
                 <td class="text-xs text-base-content/60 whitespace-nowrap">{row.created}</td>
               </tr>
             <% end %>
@@ -1353,7 +1366,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
     matches_search?(filters["search"], [row.name, row.ip]) and
       matches_field?(filters["phase"], row.phase) and
       matches_field?(filters["node"], row.node) and
-      matches_field?(filters["agent"], if(row.agent_connected?, do: "Running", else: "Not running"))
+      matches_field?(filters["agent"], if(row.agent_connected?, do: "Running", else: "Not running")) and
+      matches_field?(filters["os"], row.os)
   end
 
   defp matches_field?("", _value), do: true
@@ -1802,7 +1816,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
         "role" => & &1.role,
         "vmis" => & &1.vmi_count,
         "cpu" => &pct_sort_value(&1.cpu_pct),
-        "mem" => &pct_sort_value(&1.mem_pct)
+        "mem" => &pct_sort_value(&1.mem_pct),
+        "os" => & &1.os_image
       })
 
     assigns =
@@ -1813,7 +1828,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
         :filter_specs,
         [
           %{field: "ready", label: "Ready", options: ["Yes", "No"]},
-          %{field: "role", label: "Role", options: distinct_present(all_rows, & &1.role)}
+          %{field: "role", label: "Role", options: distinct_present(all_rows, & &1.role)},
+          %{field: "os", label: "OS", options: distinct_present(all_rows, & &1.os_image)}
         ]
       )
 
@@ -1827,6 +1843,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
               <.sortable_th tab="nodes" field="name" sort={@sort}>Name</.sortable_th>
               <.sortable_th tab="nodes" field="ready" sort={@sort}>Ready</.sortable_th>
               <.sortable_th tab="nodes" field="role" sort={@sort}>Role</.sortable_th>
+              <.sortable_th tab="nodes" field="os" sort={@sort}>OS</.sortable_th>
               <.sortable_th tab="nodes" field="vmis" sort={@sort}>VMIs</.sortable_th>
               <.sortable_th
                 tab="nodes"
@@ -1848,7 +1865,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
           </thead>
           <tbody>
             <tr :if={@rows == []}>
-              <td colspan="6" class="text-center text-base-content/50 py-8">
+              <td colspan="7" class="text-center text-base-content/50 py-8">
                 {if(@all_rows_empty?,
                   do: "No nodes returned from the API.",
                   else: "No nodes match the current filters."
@@ -1873,6 +1890,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 <td>
                   <span class="badge badge-sm badge-ghost font-mono text-[0.7rem]">{row.role}</span>
                 </td>
+                <td class="text-xs text-base-content/80 max-w-[12rem] truncate" title={row.os_image}>
+                  {row.os_image}
+                </td>
                 <td class="text-xs tabular-nums font-medium">{row.vmi_count}</td>
                 <td class="text-xs tabular-nums">{row.cpu_pct}</td>
                 <td class="text-xs tabular-nums">{row.mem_pct}</td>
@@ -1888,7 +1908,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
   defp node_row_matches_filters?(row, filters) do
     matches_search?(filters["search"], row.name) and
       matches_field?(filters["ready"], if(row.is_ready, do: "Yes", else: "No")) and
-      matches_field?(filters["role"], row.role)
+      matches_field?(filters["role"], row.role) and
+      matches_field?(filters["os"], row.os_image)
   end
 
   defp dashboard_tab_defs do
@@ -1946,8 +1967,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
            kubernetes_version: kubernetes_version,
            kubernetes_version_error: kubernetes_version_error,
            kubevirt_version: kubevirt_version,
-           kubevirt_version_error: kubevirt_version_error,
-           snapshot_at: System.system_time(:millisecond)
+           kubevirt_version_error: kubevirt_version_error
          }
        }}
     else
@@ -2092,12 +2112,6 @@ defmodule KubevirtToolsWeb.DashboardLive do
     load_buckets = prom_detail[:load_buckets] || [0, 0, 0, 0]
     node_load_from_prometheus? = Enum.sum(load_buckets) > 0
 
-    prom_chart_rev =
-      case prom_live do
-        {:ok, %{fetched_at: t}} -> t
-        _ -> Map.get(data, :snapshot_at, 0)
-      end
-
     node_load_chart_height_px =
       max(220, DashboardCharts.node_horizontal_chart_height_px(4))
 
@@ -2139,7 +2153,6 @@ defmodule KubevirtToolsWeb.DashboardLive do
       prometheus_url: prom_url,
       node_load_from_prometheus?: node_load_from_prometheus?,
       node_load_buckets: load_buckets,
-      prom_chart_rev: prom_chart_rev,
       node_load_chart_height_px: node_load_chart_height_px,
       prometheus_node_detail: prom[:node_detail] || %{}
     }
