@@ -79,6 +79,8 @@ defmodule KubevirtToolsWeb do
     quote do
       # HTML escaping functionality
       import Phoenix.HTML
+      # Material Design component library (pp_* function components)
+      use PhoenixPaper.Components
       # Core UI components
       import KubevirtToolsWeb.CoreComponents
       import KubevirtToolsWeb.ChartComponents

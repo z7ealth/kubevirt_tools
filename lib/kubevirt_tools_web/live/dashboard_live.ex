@@ -153,10 +153,13 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     Cluster-wide Virtualization Insights
                   </p>
                 </div>
-                <div class="flex items-center gap-3 rounded-xl border border-base-300/70 bg-base-200/40 px-5 py-12 text-base-content/70">
+                <.pp_paper
+                  elevation={0}
+                  class="flex items-center gap-3 border border-pp-outline/20 bg-pp-surface-variant/40 px-5 py-12 text-pp-on-surface/70"
+                >
                   <.icon name="hero-arrow-path" class="size-6 motion-safe:animate-spin" />
                   <span>Loading cluster snapshot…</span>
-                </div>
+                </.pp_paper>
               </div>
             </:loading>
             <:failed :let={_failure}>
@@ -168,10 +171,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     Cluster-wide Virtualization Insights
                   </p>
                 </div>
-                <div class="alert alert-error">
-                  <.icon name="hero-exclamation-circle" class="size-5 shrink-0" />
-                  <span>Could not load cluster data. Try refreshing or signing in again.</span>
-                </div>
+                <.pp_alert severity="error">
+                  Could not load cluster data. Try refreshing or signing in again.
+                </.pp_alert>
               </div>
             </:failed>
 
@@ -185,36 +187,35 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 </p>
               </div>
               <div class="flex flex-wrap items-center gap-2">
-                <span class="text-xs text-base-content/50 hidden sm:inline">Export</span>
+                <span class="text-xs text-pp-on-surface/50 hidden sm:inline">Export</span>
                 <.link
                   href={~p"/export/vms.xlsx"}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="btn btn-ghost btn-xs gap-1"
                   id="dashboard-export-xlsx"
                   title="Download cluster inventory as Excel (VirtualMachines sheet matches CSV)"
                 >
-                  XLSX
+                  <.pp_button variant="text" class="text-xs px-3 py-1.5">XLSX</.pp_button>
                 </.link>
                 <.link
                   href={~p"/export/vms.csv"}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="btn btn-ghost btn-xs gap-1"
                   id="dashboard-export-csv"
                   title="Download VirtualMachines as CSV"
                 >
-                  CSV
+                  <.pp_button variant="text" class="text-xs px-3 py-1.5">CSV</.pp_button>
                 </.link>
-                <button
-                  type="button"
+                <.pp_button
+                  variant="outlined"
                   phx-click="refresh"
                   id="dashboard-refresh"
-                  class="btn btn-outline btn-sm gap-2"
+                  class="text-xs"
                   title={"Also auto-refreshes every #{format_interval_label(auto_refresh_ms())}"}
                 >
-                  <.icon name="hero-arrow-path" class="size-4" /> Refresh
-                </button>
+                  <:start_icon><.icon name="hero-arrow-path" class="size-4" /></:start_icon>
+                  Refresh
+                </.pp_button>
               </div>
             </div>
 
@@ -245,7 +246,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 <div id="overview" class="space-y-8 pt-1">
                   <div>
                     <h2 class="text-lg font-medium flex items-center gap-2">
-                      <.icon name="hero-chart-bar-square" class="size-5 text-primary" />
+                      <.icon name="hero-chart-bar-square" class="size-5 text-pp-primary" />
                       Cluster overview
                       <.tab_heading_hint
                         id="dashboard-tab-overview-hint"
@@ -257,12 +258,12 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     :if={data.cluster}
                     class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs min-h-[1.75rem]"
                   >
-                    <span class="shrink-0 font-semibold uppercase tracking-wide text-base-content/55">
+                    <span class="shrink-0 font-semibold uppercase tracking-wide text-pp-on-surface/55">
                       Current context
                     </span>
-                    <span class="badge badge-ghost badge-sm gap-1 font-mono px-3 py-2 h-auto whitespace-normal text-base-content/80">
+                    <.pp_chip size="small" class="font-mono h-auto whitespace-normal">
                       {data.user} @ {data.cluster}
-                    </span>
+                    </.pp_chip>
                   </div>
 
                   <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7 gap-2 sm:gap-3">
@@ -441,7 +442,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 <section id="vms" class="space-y-3">
                   <div>
                     <h2 class="text-lg font-medium flex items-center gap-2">
-                      <.icon name="hero-computer-desktop" class="size-5 text-primary" />
+                      <.icon name="hero-computer-desktop" class="size-5 text-pp-primary" />
                       Virtual machines
                       <.tab_heading_hint
                         id="dashboard-tab-vms-hint"
@@ -450,22 +451,20 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     </h2>
                   </div>
                   <%= if data.vm_error do %>
-                    <div class="alert alert-warning text-sm">
-                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                    <.pp_alert severity="warning" class="text-sm">
                       <span>
                         Could not list VirtualMachines ({vm_error_text(data.vm_error)}).
                       </span>
-                    </div>
+                    </.pp_alert>
                   <% end %>
                   <%= if data.vmi_error do %>
-                    <div class="alert alert-warning text-sm">
-                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                    <.pp_alert severity="warning" class="text-sm">
                       <span>
                         Could not list VMIs — join columns will be empty ({vm_error_text(
                           data.vmi_error
                         )}).
                       </span>
-                    </div>
+                    </.pp_alert>
                   <% end %>
                   <%= if data.vm_error == nil do %>
                     <div class="mt-1">
@@ -508,7 +507,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 <section id="vm-networks" class="space-y-3">
                   <div>
                     <h2 class="text-lg font-medium flex items-center gap-2">
-                      <.icon name="hero-wifi" class="size-5 text-primary" /> VM network interfaces
+                      <.icon name="hero-wifi" class="size-5 text-pp-primary" /> VM network interfaces
                       <.tab_heading_hint
                         id="dashboard-tab-networks-hint"
                         tip="Declared on each VirtualMachine template (spec.template.spec.domain.devices.interfaces), with live MAC, IP, and guest interface name from the matching VMI when running."
@@ -516,12 +515,11 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     </h2>
                   </div>
                   <%= if data.vm_error do %>
-                    <div class="alert alert-warning text-sm">
-                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                    <.pp_alert severity="warning" class="text-sm">
                       <span>
                         Could not list VirtualMachines ({vm_error_text(data.vm_error)}).
                       </span>
-                    </div>
+                    </.pp_alert>
                   <% end %>
                   <%= if data.vm_error == nil do %>
                     <.virtual_machine_network_interfaces_table
@@ -544,7 +542,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 <section id="vm-disks" class="space-y-3">
                   <div>
                     <h2 class="text-lg font-medium flex items-center gap-2">
-                      <.icon name="hero-circle-stack" class="size-5 text-primary" />
+                      <.icon name="hero-circle-stack" class="size-5 text-pp-primary" />
                       VM disks &amp; volumes
                       <.tab_heading_hint
                         id="dashboard-tab-disks-hint"
@@ -553,12 +551,11 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     </h2>
                   </div>
                   <%= if data.vm_error do %>
-                    <div class="alert alert-warning text-sm">
-                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                    <.pp_alert severity="warning" class="text-sm">
                       <span>
                         Could not list VirtualMachines ({vm_error_text(data.vm_error)}).
                       </span>
-                    </div>
+                    </.pp_alert>
                   <% end %>
                   <%= if data.vm_error == nil do %>
                     <.virtual_machine_disks_detail_table
@@ -581,7 +578,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 <section id="cluster-storage-classes" class="space-y-3">
                   <div>
                     <h2 class="text-lg font-medium flex items-center gap-2">
-                      <.icon name="hero-archive-box" class="size-5 text-primary" /> Storage classes
+                      <.icon name="hero-archive-box" class="size-5 text-pp-primary" /> Storage classes
                       <.tab_heading_hint
                         id="dashboard-tab-storage-classes-hint"
                         tip="Cluster-scoped StorageClass objects from storage.k8s.io/v1. PVC counts use spec.storageClassName from all namespaces; PVCs with no class set are listed separately. Names on PVCs that do not match any listed class may be typos or removed classes."
@@ -589,12 +586,11 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     </h2>
                   </div>
                   <%= if data.storage_class_error do %>
-                    <div class="alert alert-warning text-sm">
-                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                    <.pp_alert severity="warning" class="text-sm">
                       <span>
                         Could not list StorageClasses ({vm_error_text(data.storage_class_error)}).
                       </span>
-                    </div>
+                    </.pp_alert>
                   <% end %>
                   <%= if data.storage_class_error == nil do %>
                     <.storage_classes_table
@@ -617,7 +613,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 <section id="cluster-nodes" class="space-y-3">
                   <div>
                     <h2 class="text-lg font-medium flex items-center gap-2">
-                      <.icon name="hero-server-stack" class="size-5 text-primary" /> Nodes
+                      <.icon name="hero-server-stack" class="size-5 text-pp-primary" /> Nodes
                       <.tab_heading_hint
                         id="dashboard-tab-nodes-hint"
                         tip="Kubernetes Nodes from the cluster API (status.addresses, allocatable resources, conditions). CPU and memory % prefer metrics-server NodeMetrics; when that API is missing, values are taken from Prometheus node_exporter (same queries as the dashboard) when scrape targets match the node name, hostname, or internal IP. VMIs counts use VMI status.nodeName."
@@ -625,20 +621,18 @@ defmodule KubevirtToolsWeb.DashboardLive do
                     </h2>
                   </div>
                   <%= if data.node_error do %>
-                    <div class="alert alert-warning text-sm">
-                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                    <.pp_alert severity="warning" class="text-sm">
                       <span>
                         Could not list Nodes ({vm_error_text(data.node_error)}).
                       </span>
-                    </div>
+                    </.pp_alert>
                   <% end %>
                   <%= if data.metrics_error && not m.prometheus_ok? do %>
-                    <div class="alert alert-warning text-sm py-2">
-                      <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
+                    <.pp_alert severity="warning" class="text-sm">
                       <span>
                         metrics-server NodeMetrics is unavailable ({vm_error_text(data.metrics_error)}). {cluster_usage_prometheus_hint_text()}
                       </span>
-                    </div>
+                    </.pp_alert>
                   <% end %>
                   <%= if data.node_error == nil do %>
                     <.nodes_table
@@ -662,7 +656,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
               >
                 <div>
                   <h2 class="text-lg font-medium flex items-center gap-2">
-                    <.icon name="hero-squares-2x2" class="size-5 text-primary" /> Topology
+                    <.icon name="hero-squares-2x2" class="size-5 text-pp-primary" /> Topology
                     <.tab_heading_hint
                       id="dashboard-tab-topology-hint"
                       tip="VMs are linked to cluster nodes using each VMI status.nodeName (matching VM and VMI name and namespace). Stopped VMs without a VMI appear under Unscheduled."
@@ -848,7 +842,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     ~H"""
     <div class="flex flex-wrap items-center gap-x-5 gap-y-2 py-2.5">
       <div class="flex items-center gap-2">
-        <.icon name="hero-magnifying-glass" class="size-4 text-base-content/40" />
+        <.icon name="hero-magnifying-glass" class="size-4 text-pp-on-surface/40" />
         <input
           type="text"
           value={Map.get(@filters, "search", "")}
@@ -858,7 +852,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
           phx-value-field="search"
           phx-debounce="300"
           name="value"
-          class="input input-xs input-bordered w-44"
+          class="w-44 rounded-sm border border-pp-outline bg-pp-surface px-2 py-1 text-xs text-pp-on-surface outline-none focus:border-pp-primary"
         />
       </div>
       <form
@@ -867,10 +861,13 @@ defmodule KubevirtToolsWeb.DashboardLive do
         class="flex items-center gap-2"
         phx-change="set_filter"
       >
-        <label class="text-xs text-base-content/55 whitespace-nowrap">{spec.label}</label>
+        <label class="text-xs text-pp-on-surface/55 whitespace-nowrap">{spec.label}</label>
         <input type="hidden" name="tab" value={@tab} />
         <input type="hidden" name="field" value={spec.field} />
-        <select class="select select-xs select-bordered" name="value">
+        <select
+          class="rounded-sm border border-pp-outline bg-pp-surface px-2 py-1 text-xs text-pp-on-surface outline-none focus:border-pp-primary"
+          name="value"
+        >
           <option value="" selected={Map.get(@filters, spec.field, "") == ""}>All</option>
           <option
             :for={opt <- spec.options}
@@ -881,15 +878,15 @@ defmodule KubevirtToolsWeb.DashboardLive do
           </option>
         </select>
       </form>
-      <button
+      <.pp_button
         :if={@active?}
-        type="button"
+        variant="text"
         phx-click="clear_filters"
         phx-value-tab={@tab}
-        class="btn btn-ghost btn-xs"
+        class="text-xs px-3 py-1"
       >
         Clear filters
-      </button>
+      </.pp_button>
     </div>
     """
   end
@@ -908,30 +905,23 @@ defmodule KubevirtToolsWeb.DashboardLive do
         _ -> nil
       end
 
-    assigns = assign(assigns, :direction, direction)
+    assigns = assign(assigns, :direction, direction && to_string(direction))
 
     ~H"""
-    <th
+    <.pp_table_cell
+      variant="head"
+      sortable
+      sort_direction={@direction}
+      class={@class}
       title={@title}
-      class={["cursor-pointer select-none hover:text-base-content transition-colors", @class]}
       phx-click="sort"
       phx-value-tab={@tab}
       phx-value-field={@field}
     >
-      <span class="inline-flex items-center gap-1">
-        {render_slot(@inner_block)}
-        <.icon
-          name={sort_icon_name(@direction)}
-          class={["size-3", @direction == nil && "opacity-30"]}
-        />
-      </span>
-    </th>
+      {render_slot(@inner_block)}
+    </.pp_table_cell>
     """
   end
-
-  defp sort_icon_name(:asc), do: "hero-chevron-up"
-  defp sort_icon_name(:desc), do: "hero-chevron-down"
-  defp sort_icon_name(nil), do: "hero-chevron-up-down"
 
   defp sort_rows(rows, nil, _field_funs), do: rows
 
@@ -964,7 +954,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   defp stat_tile(assigns) do
     value_class =
       case assigns.highlight do
-        :primary -> "text-primary"
+        :primary -> "text-pp-primary"
         :success -> "text-emerald-400"
         :danger -> "text-stopped"
         :warning -> "text-amber-400"
@@ -974,13 +964,16 @@ defmodule KubevirtToolsWeb.DashboardLive do
     assigns = assign(assigns, :value_class, value_class)
 
     ~H"""
-    <div class="rounded-xl border border-base-300/60 bg-base-200/40 px-4 py-3 transition hover:border-primary/30 hover:bg-base-200/70">
-      <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">
+    <.pp_paper
+      elevation={1}
+      class="border border-pp-outline/15 px-4 py-3 transition hover:border-pp-primary/30"
+    >
+      <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-pp-on-surface/50">
         {@label}
       </p>
       <p class={["text-xl font-semibold tabular-nums mt-1", @value_class]}>{@value}</p>
-      <p :if={@sub} class="text-xs text-base-content/45 mt-0.5">{@sub}</p>
-    </div>
+      <p :if={@sub} class="text-xs text-pp-on-surface/45 mt-0.5">{@sub}</p>
+    </.pp_paper>
     """
   end
 
@@ -1024,7 +1017,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   defp usage_cluster_card(assigns) do
     value_class =
       case assigns.highlight do
-        :primary -> "text-primary"
+        :primary -> "text-pp-primary"
         :success -> "text-emerald-400"
         :danger -> "text-stopped"
         :warning -> "text-amber-400"
@@ -1085,16 +1078,17 @@ defmodule KubevirtToolsWeb.DashboardLive do
         </div>
       </section>
     <% else %>
-      <div
+      <.pp_paper
         id={@id}
-        class="rounded-xl border border-base-300/60 bg-base-200/40 px-4 py-3 transition hover:border-primary/30 hover:bg-base-200/70"
+        elevation={1}
+        class="border border-pp-outline/15 px-4 py-3 transition hover:border-pp-primary/30"
       >
-        <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">
+        <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-pp-on-surface/50">
           {@label}
         </p>
         <p class={["text-xl font-semibold tabular-nums mt-1", @value_class]}>{@value}</p>
-        <p :if={@sub} class="text-xs text-base-content/45 mt-0.5">{@sub}</p>
-      </div>
+        <p :if={@sub} class="text-xs text-pp-on-surface/45 mt-0.5">{@sub}</p>
+      </.pp_paper>
     <% end %>
     """
   end
@@ -1107,24 +1101,22 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   defp dashboard_version_card(assigns) do
     ~H"""
-    <div
+    <.pp_paper
       id={@id}
-      class={[
-        "rounded-xl border border-base-300/60 bg-base-200/40 px-4 py-3 min-w-0 w-full",
-        "transition hover:border-primary/30 hover:bg-base-200/70"
-      ]}
+      elevation={1}
+      class="border border-pp-outline/15 px-4 py-3 min-w-0 w-full transition hover:border-pp-primary/30"
     >
-      <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">
+      <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-pp-on-surface/50">
         {@label}
       </p>
       <p
-        class="text-xl font-semibold tabular-nums mt-1 text-base-content break-words leading-snug"
+        class="text-xl font-semibold tabular-nums mt-1 text-pp-on-surface break-words leading-snug"
         title={@title}
       >
         {@value}
       </p>
-      <p :if={@hint} class="text-xs text-base-content/55 mt-1.5 leading-snug">{@hint}</p>
-    </div>
+      <p :if={@hint} class="text-xs text-pp-on-surface/55 mt-1.5 leading-snug">{@hint}</p>
+    </.pp_paper>
     """
   end
 
@@ -1249,9 +1241,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
         specs={@filter_specs}
         search_placeholder="Search by name or IP…"
       />
-      <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-        <table class="table table-sm">
-          <thead class="bg-base-200/60 text-base-content/80">
+      <.pp_table_container>
+        <.pp_table dense>
+          <.pp_table_head>
             <tr>
               <.sortable_th tab="vms" field="name" sort={@sort}>Name</.sortable_th>
               <.sortable_th tab="vms" field="phase" sort={@sort}>Phase</.sortable_th>
@@ -1276,13 +1268,18 @@ defmodule KubevirtToolsWeb.DashboardLive do
               <.sortable_th tab="vms" field="agent" sort={@sort} title="QEMU guest agent connected">
                 Agent
               </.sortable_th>
-              <.sortable_th tab="vms" field="os" sort={@sort} title="Guest-reported OS (qemu-guest-agent)">
+              <.sortable_th
+                tab="vms"
+                field="os"
+                sort={@sort}
+                title="Guest-reported OS (qemu-guest-agent)"
+              >
                 OS
               </.sortable_th>
               <.sortable_th tab="vms" field="created" sort={@sort}>Created</.sortable_th>
             </tr>
-          </thead>
-          <tbody>
+          </.pp_table_head>
+          <.pp_table_body>
             <tr :if={@rows == []}>
               <td colspan="9" class="text-center text-base-content/50 py-8">
                 {if(@items == [], do: @empty_label, else: "No VMs match the current filters.")}
@@ -1342,7 +1339,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                   {row.ip}
                 </td>
                 <td>
-                  <span :if={row.agent_connected?} class="text-xs font-medium text-primary">
+                  <span :if={row.agent_connected?} class="text-xs font-medium text-pp-primary">
                     Running
                   </span>
                   <span :if={!row.agent_connected?} class="text-xs font-medium text-stopped">
@@ -1355,9 +1352,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 <td class="text-xs text-base-content/60 whitespace-nowrap">{row.created}</td>
               </tr>
             <% end %>
-          </tbody>
-        </table>
-      </div>
+          </.pp_table_body>
+        </.pp_table>
+      </.pp_table_container>
     </div>
     """
   end
@@ -1366,7 +1363,10 @@ defmodule KubevirtToolsWeb.DashboardLive do
     matches_search?(filters["search"], [row.name, row.ip]) and
       matches_field?(filters["phase"], row.phase) and
       matches_field?(filters["node"], row.node) and
-      matches_field?(filters["agent"], if(row.agent_connected?, do: "Running", else: "Not running")) and
+      matches_field?(
+        filters["agent"],
+        if(row.agent_connected?, do: "Running", else: "Not running")
+      ) and
       matches_field?(filters["os"], row.os)
   end
 
@@ -1396,9 +1396,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   defp orphan_virtual_machine_instance_table(assigns) do
     ~H"""
-    <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-      <table class="table table-sm">
-        <thead class="bg-base-200/60 text-base-content/80">
+    <.pp_table_container>
+      <.pp_table dense>
+        <.pp_table_head>
           <tr>
             <th>Namespace</th>
             <th>Name</th>
@@ -1410,14 +1410,14 @@ defmodule KubevirtToolsWeb.DashboardLive do
             <th>Ready</th>
             <th>Created</th>
           </tr>
-        </thead>
-        <tbody>
+        </.pp_table_head>
+        <.pp_table_body>
           <%= for {item, i} <- Enum.with_index(@items) do %>
             <tr id={"#{@id_prefix}-row-#{i}"} class="hover:bg-base-200/40 transition-colors">
               <td class="font-mono text-xs whitespace-nowrap">{vm_meta(item, :namespace)}</td>
               <td class="font-medium whitespace-nowrap">{vm_meta(item, :name)}</td>
               <td>
-                <span class="badge badge-sm badge-outline">{vmi_phase(item)}</span>
+                <.pp_chip size="small" variant="outlined">{vmi_phase(item)}</.pp_chip>
               </td>
               <td
                 class="font-mono text-xs text-base-content/70 max-w-[10rem] truncate"
@@ -1439,9 +1439,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
               </td>
             </tr>
           <% end %>
-        </tbody>
-      </table>
-    </div>
+        </.pp_table_body>
+      </.pp_table>
+    </.pp_table_container>
     """
   end
 
@@ -1473,7 +1473,11 @@ defmodule KubevirtToolsWeb.DashboardLive do
       |> assign(
         :filter_specs,
         [
-          %{field: "binding", label: "Binding", options: distinct_present(all_rows, & &1.binding)},
+          %{
+            field: "binding",
+            label: "Binding",
+            options: distinct_present(all_rows, & &1.binding)
+          },
           %{
             field: "vmi_phase",
             label: "VMI phase",
@@ -1490,54 +1494,54 @@ defmodule KubevirtToolsWeb.DashboardLive do
         specs={@filter_specs}
         search_placeholder="Search by VM name or IP…"
       />
-      <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-        <table class="table table-sm">
-        <thead class="bg-base-200/60 text-base-content/80">
-          <tr>
-            <.sortable_th tab="networks" field="vm" sort={@sort}>VM</.sortable_th>
-            <.sortable_th tab="networks" field="interface" sort={@sort}>Interface</.sortable_th>
-            <.sortable_th tab="networks" field="binding" sort={@sort}>Binding</.sortable_th>
-            <.sortable_th tab="networks" field="ips" sort={@sort}>IP addresses</.sortable_th>
-            <.sortable_th tab="networks" field="vmi_phase" sort={@sort}>VMI phase</.sortable_th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr :if={@rows == []}>
-            <td colspan="5" class="text-center text-base-content/50 py-8">
-              {if(@all_rows_empty?,
-                do: "No network interfaces defined on any VirtualMachine.",
-                else: "No interfaces match the current filters."
-              )}
-            </td>
-          </tr>
-          <%= for {row, i} <- Enum.with_index(@rows) do %>
-            <tr
-              id={"#{@id_prefix}-row-#{i}"}
-              class="hover:bg-base-200/40 transition-colors cursor-pointer"
-              phx-click={
-                JS.navigate(~p"/networks/#{row.namespace}/#{row.vm_name}/#{row.iface_name}")
-              }
-            >
-              <td class="whitespace-nowrap">
-                <div class="font-medium">{row.vm_name}</div>
-                <div class="font-mono text-xs text-base-content/60">{row.namespace}</div>
-              </td>
-              <td class="text-xs font-mono text-base-content/80">{row.iface_name}</td>
-              <td class="text-xs whitespace-nowrap">{row.binding}</td>
-              <td
-                class="font-mono text-xs text-base-content/80 max-w-[14rem] truncate"
-                title={row.ips}
-              >
-                {row.ips}
-              </td>
-              <td>
-                <span class="badge badge-sm badge-ghost">{row.vmi_phase}</span>
+      <.pp_table_container>
+        <.pp_table dense>
+          <.pp_table_head>
+            <tr>
+              <.sortable_th tab="networks" field="vm" sort={@sort}>VM</.sortable_th>
+              <.sortable_th tab="networks" field="interface" sort={@sort}>Interface</.sortable_th>
+              <.sortable_th tab="networks" field="binding" sort={@sort}>Binding</.sortable_th>
+              <.sortable_th tab="networks" field="ips" sort={@sort}>IP addresses</.sortable_th>
+              <.sortable_th tab="networks" field="vmi_phase" sort={@sort}>VMI phase</.sortable_th>
+            </tr>
+          </.pp_table_head>
+          <.pp_table_body>
+            <tr :if={@rows == []}>
+              <td colspan="5" class="text-center text-base-content/50 py-8">
+                {if(@all_rows_empty?,
+                  do: "No network interfaces defined on any VirtualMachine.",
+                  else: "No interfaces match the current filters."
+                )}
               </td>
             </tr>
-          <% end %>
-        </tbody>
-        </table>
-      </div>
+            <%= for {row, i} <- Enum.with_index(@rows) do %>
+              <tr
+                id={"#{@id_prefix}-row-#{i}"}
+                class="hover:bg-base-200/40 transition-colors cursor-pointer"
+                phx-click={
+                  JS.navigate(~p"/networks/#{row.namespace}/#{row.vm_name}/#{row.iface_name}")
+                }
+              >
+                <td class="whitespace-nowrap">
+                  <div class="font-medium">{row.vm_name}</div>
+                  <div class="font-mono text-xs text-base-content/60">{row.namespace}</div>
+                </td>
+                <td class="text-xs font-mono text-base-content/80">{row.iface_name}</td>
+                <td class="text-xs whitespace-nowrap">{row.binding}</td>
+                <td
+                  class="font-mono text-xs text-base-content/80 max-w-[14rem] truncate"
+                  title={row.ips}
+                >
+                  {row.ips}
+                </td>
+                <td>
+                  <.pp_chip size="small">{row.vmi_phase}</.pp_chip>
+                </td>
+              </tr>
+            <% end %>
+          </.pp_table_body>
+        </.pp_table>
+      </.pp_table_container>
     </div>
     """
   end
@@ -1598,19 +1602,21 @@ defmodule KubevirtToolsWeb.DashboardLive do
     ~H"""
     <div class="space-y-2">
       <.table_filter_bar tab="disks" filters={@filters} specs={@filter_specs} />
-      <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-        <table class="table table-sm">
-          <thead class="bg-base-200/60 text-base-content/80">
+      <.pp_table_container>
+        <.pp_table dense>
+          <.pp_table_head>
             <tr>
               <.sortable_th tab="disks" field="vm" sort={@sort}>VM</.sortable_th>
               <.sortable_th tab="disks" field="disk" sort={@sort}>Disk</.sortable_th>
               <.sortable_th tab="disks" field="volume_kind" sort={@sort}>Volume kind</.sortable_th>
               <.sortable_th tab="disks" field="size" sort={@sort}>Size</.sortable_th>
-              <.sortable_th tab="disks" field="storage_class" sort={@sort}>Storage class</.sortable_th>
+              <.sortable_th tab="disks" field="storage_class" sort={@sort}>
+                Storage class
+              </.sortable_th>
               <.sortable_th tab="disks" field="pvc_phase" sort={@sort}>PVC phase</.sortable_th>
             </tr>
-          </thead>
-          <tbody>
+          </.pp_table_head>
+          <.pp_table_body>
             <tr :if={@rows == []}>
               <td colspan="6" class="text-center text-base-content/50 py-8">
                 {if(@all_rows_empty?,
@@ -1638,9 +1644,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 <td class="text-xs">{row.pvc_phase}</td>
               </tr>
             <% end %>
-          </tbody>
-        </table>
-      </div>
+          </.pp_table_body>
+        </.pp_table>
+      </.pp_table_container>
     </div>
     """
   end
@@ -1709,9 +1715,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
     </div>
     <div class="space-y-2">
       <.table_filter_bar tab="storage_classes" filters={@filters} specs={@filter_specs} />
-      <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-        <table class="table table-sm">
-          <thead class="bg-base-200/60 text-base-content/80">
+      <.pp_table_container>
+        <.pp_table dense>
+          <.pp_table_head>
             <tr>
               <.sortable_th tab="storage_classes" field="name" sort={@sort}>Name</.sortable_th>
               <.sortable_th tab="storage_classes" field="default" sort={@sort}>Default</.sortable_th>
@@ -1727,8 +1733,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 PVCs
               </.sortable_th>
             </tr>
-          </thead>
-          <tbody>
+          </.pp_table_head>
+          <.pp_table_body>
             <tr :if={@rows == []}>
               <td colspan="4" class="text-center text-base-content/50 py-8">
                 {if(@all_rows_empty?,
@@ -1738,31 +1744,31 @@ defmodule KubevirtToolsWeb.DashboardLive do
               </td>
             </tr>
             <%= for {row, i} <- Enum.with_index(@rows) do %>
-            <tr
-              id={"#{@id_prefix}-row-#{i}"}
-              class="hover:bg-base-200/40 transition-colors cursor-pointer"
-              phx-click={JS.navigate(~p"/storage_classes/#{row.name}")}
-            >
-              <td class="font-mono text-xs font-medium whitespace-nowrap">{row.name}</td>
-              <td>
-                <%= if row.default? do %>
-                  <span class="badge badge-xs badge-primary">default</span>
-                <% else %>
-                  <span class="text-xs text-base-content/40">—</span>
-                <% end %>
-              </td>
-              <td
-                class="text-xs font-mono text-base-content/80 max-w-[14rem] truncate"
-                title={row.provisioner}
+              <tr
+                id={"#{@id_prefix}-row-#{i}"}
+                class="hover:bg-base-200/40 transition-colors cursor-pointer"
+                phx-click={JS.navigate(~p"/storage_classes/#{row.name}")}
               >
-                {row.provisioner}
-              </td>
-              <td class="text-xs tabular-nums font-medium">{row.pvc_count}</td>
-            </tr>
-          <% end %>
-          </tbody>
-        </table>
-      </div>
+                <td class="font-mono text-xs font-medium whitespace-nowrap">{row.name}</td>
+                <td>
+                  <%= if row.default? do %>
+                    <.pp_chip size="small" color="primary">default</.pp_chip>
+                  <% else %>
+                    <span class="text-xs text-base-content/40">—</span>
+                  <% end %>
+                </td>
+                <td
+                  class="text-xs font-mono text-base-content/80 max-w-[14rem] truncate"
+                  title={row.provisioner}
+                >
+                  {row.provisioner}
+                </td>
+                <td class="text-xs tabular-nums font-medium">{row.pvc_count}</td>
+              </tr>
+            <% end %>
+          </.pp_table_body>
+        </.pp_table>
+      </.pp_table_container>
     </div>
     <div
       :if={@orphan_refs != []}
@@ -1836,9 +1842,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
     ~H"""
     <div class="space-y-2">
       <.table_filter_bar tab="nodes" filters={@filters} specs={@filter_specs} />
-      <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-        <table class="table table-sm">
-          <thead class="bg-base-200/60 text-base-content/80">
+      <.pp_table_container>
+        <.pp_table dense>
+          <.pp_table_head>
             <tr>
               <.sortable_th tab="nodes" field="name" sort={@sort}>Name</.sortable_th>
               <.sortable_th tab="nodes" field="ready" sort={@sort}>Ready</.sortable_th>
@@ -1862,8 +1868,8 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 Mem %
               </.sortable_th>
             </tr>
-          </thead>
-          <tbody>
+          </.pp_table_head>
+          <.pp_table_body>
             <tr :if={@rows == []}>
               <td colspan="7" class="text-center text-base-content/50 py-8">
                 {if(@all_rows_empty?,
@@ -1882,13 +1888,13 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 <td class="font-mono text-xs font-medium whitespace-nowrap">{row.name}</td>
                 <td>
                   <%= if row.is_ready do %>
-                    <span class="badge badge-sm badge-success">Yes</span>
+                    <.pp_chip size="small" color="success">Yes</.pp_chip>
                   <% else %>
-                    <span class="badge badge-sm badge-error">No</span>
+                    <.pp_chip size="small" color="error">No</.pp_chip>
                   <% end %>
                 </td>
                 <td>
-                  <span class="badge badge-sm badge-ghost font-mono text-[0.7rem]">{row.role}</span>
+                  <.pp_chip size="small" class="font-mono text-[0.7rem]">{row.role}</.pp_chip>
                 </td>
                 <td class="text-xs text-base-content/80 max-w-[12rem] truncate" title={row.os_image}>
                   {row.os_image}
@@ -1898,9 +1904,9 @@ defmodule KubevirtToolsWeb.DashboardLive do
                 <td class="text-xs tabular-nums">{row.mem_pct}</td>
               </tr>
             <% end %>
-          </tbody>
-        </table>
-      </div>
+          </.pp_table_body>
+        </.pp_table>
+      </.pp_table_container>
     </div>
     """
   end
@@ -1933,7 +1939,10 @@ defmodule KubevirtToolsWeb.DashboardLive do
       {pvcs, pvc_err} = safe_list(&ClusterInventory.list_pvcs/1, conn)
       {storage_classes, sc_err} = safe_list(&ClusterExportLists.list_storage_classes/1, conn)
       {node_metrics, metrics_err} = safe_list(&ClusterMetrics.list_node_metrics/1, conn)
-      {virt_launcher_pods, _pods_err} = safe_list(&ClusterInventory.list_virt_launcher_pods/1, conn)
+
+      {virt_launcher_pods, _pods_err} =
+        safe_list(&ClusterInventory.list_virt_launcher_pods/1, conn)
+
       {pod_metrics, _pod_metrics_err} = safe_list(&ClusterMetrics.list_pod_metrics/1, conn)
 
       {kubernetes_version, kubernetes_version_error} =
@@ -2191,5 +2200,4 @@ defmodule KubevirtToolsWeb.DashboardLive do
     do: {value, sub, ClusterMetrics.highlight_for_usage({:ok, value, sub})}
 
   defp usage_card_fields({:unavailable, value, sub}), do: {value, sub, :neutral}
-
 end

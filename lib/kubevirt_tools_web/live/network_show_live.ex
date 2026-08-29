@@ -10,7 +10,11 @@ defmodule KubevirtToolsWeb.NetworkShowLive do
   alias KubevirtTools.KubeVirt
 
   @impl true
-  def mount(%{"namespace" => ns, "vm_name" => vm_name, "iface_name" => iface_name}, _session, socket) do
+  def mount(
+        %{"namespace" => ns, "vm_name" => vm_name, "iface_name" => iface_name},
+        _session,
+        socket
+      ) do
     token = socket.assigns.kubeconfig_token
 
     socket =
@@ -46,7 +50,8 @@ defmodule KubevirtToolsWeb.NetworkShowLive do
     end
   end
 
-  defp matches?(item, ns, name), do: vm_meta(item, :namespace) == ns and vm_meta(item, :name) == name
+  defp matches?(item, ns, name),
+    do: vm_meta(item, :namespace) == ns and vm_meta(item, :name) == name
 
   @impl true
   def render(assigns) do
@@ -55,48 +60,50 @@ defmodule KubevirtToolsWeb.NetworkShowLive do
       <div class="space-y-6 max-w-full min-w-0">
         <.link
           navigate={~p"/dashboard?tab=networks"}
-          class="link link-hover text-sm text-base-content/60"
+          class="text-sm text-pp-primary hover:underline"
         >
           &larr; Back to Networks
         </.link>
 
         <.async_result :let={data} assign={@row_detail}>
           <:loading>
-            <div class="flex items-center gap-3 rounded-xl border border-base-300/70 bg-base-200/40 px-5 py-12 text-base-content/70">
+            <.pp_paper
+              elevation={0}
+              class="flex items-center gap-3 border border-pp-outline/20 bg-pp-surface-variant/40 px-5 py-12 text-pp-on-surface/70"
+            >
               <.icon name="hero-arrow-path" class="size-6 motion-safe:animate-spin" />
               <span>Loading interface…</span>
-            </div>
+            </.pp_paper>
           </:loading>
           <:failed :let={_failure}>
-            <div class="alert alert-error">
-              <.icon name="hero-exclamation-circle" class="size-5 shrink-0" />
-              <span>Could not load this interface. Try refreshing or signing in again.</span>
-            </div>
+            <.pp_alert severity="error">
+              Could not load this interface. Try refreshing or signing in again.
+            </.pp_alert>
           </:failed>
 
-          <div :if={!data.found?} class="alert alert-warning">
-            <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
-            <span>
-              Interface <span class="font-mono">{@iface_name}</span>
-              on <span class="font-mono">{@namespace}/{@vm_name}</span>
-              was not found — the VM or its interface may have changed.
-            </span>
-          </div>
+          <.pp_alert :if={!data.found?} severity="warning">
+            Interface <span class="font-mono">{@iface_name}</span>
+            on <span class="font-mono">{@namespace}/{@vm_name}</span>
+            was not found — the VM or its interface may have changed.
+          </.pp_alert>
 
           <div :if={data.found?} class="space-y-6">
             <div>
               <h1 class="text-2xl font-semibold tracking-tight flex items-center gap-3">
-                <.icon name="hero-wifi" class="size-6 text-primary" /> {data.row.iface_name}
+                <.icon name="hero-wifi" class="size-6 text-pp-primary" /> {data.row.iface_name}
               </h1>
               <p class="text-sm text-base-content/60 mt-1">
                 on
-                <.link navigate={~p"/vms/#{@namespace}/#{@vm_name}"} class="link font-mono">
+                <.link
+                  navigate={~p"/vms/#{@namespace}/#{@vm_name}"}
+                  class="text-pp-primary hover:underline font-mono"
+                >
                   {@namespace}/{@vm_name}
                 </.link>
               </p>
             </div>
 
-            <div class="rounded-xl border border-base-300/70 bg-base-100 shadow-sm p-4">
+            <.pp_paper class="p-4">
               <.list>
                 <:item title="Model">{data.row.model}</:item>
                 <:item title="Binding">{data.row.binding}</:item>
@@ -106,7 +113,7 @@ defmodule KubevirtToolsWeb.NetworkShowLive do
                 <:item title="Guest interface">{data.row.guest_iface}</:item>
                 <:item title="VMI phase">{data.row.vmi_phase}</:item>
               </.list>
-            </div>
+            </.pp_paper>
           </div>
         </.async_result>
       </div>

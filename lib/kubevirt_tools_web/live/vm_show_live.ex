@@ -138,7 +138,8 @@ defmodule KubevirtToolsWeb.VmShowLive do
     end
   end
 
-  defp matches?(item, ns, name), do: vm_meta(item, :namespace) == ns and vm_meta(item, :name) == name
+  defp matches?(item, ns, name),
+    do: vm_meta(item, :namespace) == ns and vm_meta(item, :name) == name
 
   defp safe_list(fun, conn) do
     case fun.(conn) do
@@ -152,31 +153,30 @@ defmodule KubevirtToolsWeb.VmShowLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={%{}}>
       <div class="space-y-6 max-w-full min-w-0">
-        <.link navigate={~p"/dashboard?tab=vms"} class="link link-hover text-sm text-base-content/60">
+        <.link navigate={~p"/dashboard?tab=vms"} class="text-sm text-pp-primary hover:underline">
           &larr; Back to VMs
         </.link>
 
         <.async_result :let={data} assign={@vm_detail}>
           <:loading>
-            <div class="flex items-center gap-3 rounded-xl border border-base-300/70 bg-base-200/40 px-5 py-12 text-base-content/70">
+            <.pp_paper
+              elevation={0}
+              class="flex items-center gap-3 border border-pp-outline/20 bg-pp-surface-variant/40 px-5 py-12 text-pp-on-surface/70"
+            >
               <.icon name="hero-arrow-path" class="size-6 motion-safe:animate-spin" />
               <span>Loading VM…</span>
-            </div>
+            </.pp_paper>
           </:loading>
           <:failed :let={_failure}>
-            <div class="alert alert-error">
-              <.icon name="hero-exclamation-circle" class="size-5 shrink-0" />
-              <span>Could not load this VM. Try refreshing or signing in again.</span>
-            </div>
+            <.pp_alert severity="error">
+              Could not load this VM. Try refreshing or signing in again.
+            </.pp_alert>
           </:failed>
 
-          <div :if={!data.found?} class="alert alert-warning">
-            <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
-            <span>
-              VirtualMachine <span class="font-mono">{@namespace}/{@name}</span>
-              was not found — it may have been deleted.
-            </span>
-          </div>
+          <.pp_alert :if={!data.found?} severity="warning">
+            VirtualMachine <span class="font-mono">{@namespace}/{@name}</span>
+            was not found — it may have been deleted.
+          </.pp_alert>
 
           <div :if={data.found?} class="space-y-6">
             <% {cores, sockets, guest_cpu_total} =
@@ -185,19 +185,20 @@ defmodule KubevirtToolsWeb.VmShowLive do
             <% mem_pct = vm_mem_usage_pct(data.vm, data.vmi, data.usage) %>
             <div>
               <h1 class="text-2xl font-semibold tracking-tight flex items-center gap-3">
-                <.icon name="hero-computer-desktop" class="size-6 text-primary" />
+                <.icon name="hero-computer-desktop" class="size-6 text-pp-primary" />
                 {vm_meta(data.vm, :name)}
                 <span class={vm_phase_badge_classes(data.vm)}>{vm_phase(data.vm)}</span>
-                <span :if={vmi_agent_connected?(data.vmi)} class="badge badge-sm badge-info gap-1">
-                  <.icon name="hero-command-line" class="size-3" /> Guest agent
-                </span>
+                <.pp_chip :if={vmi_agent_connected?(data.vmi)} size="small" color="info">
+                  <:icon><.icon name="hero-command-line" class="size-3" /></:icon>
+                  Guest agent
+                </.pp_chip>
               </h1>
               <p class="text-sm text-base-content/60 mt-1 font-mono">
                 {vm_meta(data.vm, :namespace)}
               </p>
             </div>
 
-            <div class="rounded-xl border border-base-300/70 bg-base-100 shadow-sm p-4">
+            <.pp_paper class="p-4">
               <.list>
                 <:item title="Boot mode">{vm_boot_mode(data.vm)}</:item>
                 <:item title="OS">{vmi_os_display(data.vmi)}</:item>
@@ -243,28 +244,26 @@ defmodule KubevirtToolsWeb.VmShowLive do
                 <:item title="IP">{if(data.vmi, do: vmi_primary_ip(data.vmi), else: "—")}</:item>
                 <:item title="Created">{vm_meta(data.vm, :created)}</:item>
               </.list>
-            </div>
+            </.pp_paper>
 
-            <%
-              overlay_message =
-                "Requires Prometheus scraping cAdvisor container metrics — set PROMETHEUS_URL (see README)"
+            <% overlay_message =
+              "Requires Prometheus scraping cAdvisor container metrics — set PROMETHEUS_URL (see README)"
 
-              {cpu_points, mem_points, overlay} =
-                case @usage_history do
-                  %{ok?: true, result: {:ok, %{cpu_points: c, mem_points: m}}}
-                  when length(c) >= 2 ->
-                    {c, m, nil}
+            {cpu_points, mem_points, overlay} =
+              case @usage_history do
+                %{ok?: true, result: {:ok, %{cpu_points: c, mem_points: m}}}
+                when length(c) >= 2 ->
+                  {c, m, nil}
 
-                  %{ok?: true} ->
-                    {[], [], overlay_message}
+                %{ok?: true} ->
+                  {[], [], overlay_message}
 
-                  %{loading: l} when l not in [nil, false] ->
-                    {[], [], "Checking Prometheus…"}
+                %{loading: l} when l not in [nil, false] ->
+                  {[], [], "Checking Prometheus…"}
 
-                  _ ->
-                    {[], [], overlay_message}
-                end
-            %>
+                _ ->
+                  {[], [], overlay_message}
+              end %>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
               <.apex_chart
                 id={"vm-cpu-usage-chart-#{@namespace}-#{@name}"}
@@ -289,80 +288,94 @@ defmodule KubevirtToolsWeb.VmShowLive do
 
             <div class="space-y-3">
               <h2 class="text-lg font-medium flex items-center gap-2">
-                <.icon name="hero-wifi" class="size-5 text-primary" /> Network interfaces
+                <.icon name="hero-wifi" class="size-5 text-pp-primary" /> Network interfaces
               </h2>
-              <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-                <table class="table table-sm">
-                  <thead class="bg-base-200/60 text-base-content/80">
-                    <tr>
-                      <th>Interface</th>
-                      <th>Model</th>
-                      <th>Binding</th>
-                      <th>MAC (spec)</th>
-                      <th>MAC (VMI)</th>
-                      <th>IP addresses</th>
-                      <th>Guest iface</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr :if={data.network_rows == []}>
-                      <td colspan="7" class="text-center text-base-content/50 py-6">
+              <.pp_table_container>
+                <.pp_table dense>
+                  <.pp_table_head>
+                    <.pp_table_row>
+                      <.pp_table_cell variant="head">Interface</.pp_table_cell>
+                      <.pp_table_cell variant="head">Model</.pp_table_cell>
+                      <.pp_table_cell variant="head">Binding</.pp_table_cell>
+                      <.pp_table_cell variant="head">MAC (spec)</.pp_table_cell>
+                      <.pp_table_cell variant="head">MAC (VMI)</.pp_table_cell>
+                      <.pp_table_cell variant="head">IP addresses</.pp_table_cell>
+                      <.pp_table_cell variant="head">Guest iface</.pp_table_cell>
+                    </.pp_table_row>
+                  </.pp_table_head>
+                  <.pp_table_body>
+                    <.pp_table_row :if={data.network_rows == []}>
+                      <.pp_table_cell colspan="7" align="center" class="text-pp-on-surface/50 py-6">
                         No network interfaces defined.
-                      </td>
-                    </tr>
-                    <tr :for={row <- data.network_rows} class="hover:bg-base-200/40">
-                      <td class="text-xs font-mono">{row.iface_name}</td>
-                      <td class="text-xs">{row.model}</td>
-                      <td class="text-xs whitespace-nowrap">{row.binding}</td>
-                      <td class="font-mono text-xs text-base-content/70">{row.mac_spec}</td>
-                      <td class="font-mono text-xs text-base-content/70">{row.mac_live}</td>
-                      <td class="font-mono text-xs text-base-content/80">{row.ips}</td>
-                      <td class="font-mono text-xs text-base-content/70">{row.guest_iface}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                      </.pp_table_cell>
+                    </.pp_table_row>
+                    <.pp_table_row :for={row <- data.network_rows}>
+                      <.pp_table_cell class="text-xs font-mono">{row.iface_name}</.pp_table_cell>
+                      <.pp_table_cell class="text-xs">{row.model}</.pp_table_cell>
+                      <.pp_table_cell class="text-xs whitespace-nowrap">{row.binding}</.pp_table_cell>
+                      <.pp_table_cell class="font-mono text-xs text-pp-on-surface/70">
+                        {row.mac_spec}
+                      </.pp_table_cell>
+                      <.pp_table_cell class="font-mono text-xs text-pp-on-surface/70">
+                        {row.mac_live}
+                      </.pp_table_cell>
+                      <.pp_table_cell class="font-mono text-xs text-pp-on-surface/80">
+                        {row.ips}
+                      </.pp_table_cell>
+                      <.pp_table_cell class="font-mono text-xs text-pp-on-surface/70">
+                        {row.guest_iface}
+                      </.pp_table_cell>
+                    </.pp_table_row>
+                  </.pp_table_body>
+                </.pp_table>
+              </.pp_table_container>
             </div>
 
             <div class="space-y-3">
               <h2 class="text-lg font-medium flex items-center gap-2">
-                <.icon name="hero-circle-stack" class="size-5 text-primary" /> Disks &amp; volumes
+                <.icon name="hero-circle-stack" class="size-5 text-pp-primary" /> Disks &amp; volumes
               </h2>
-              <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-                <table class="table table-sm">
-                  <thead class="bg-base-200/60 text-base-content/80">
-                    <tr>
-                      <th>Disk</th>
-                      <th>Device</th>
-                      <th>Bus</th>
-                      <th>Boot</th>
-                      <th>Volume kind</th>
-                      <th>Source</th>
-                      <th>Size</th>
-                      <th>Storage class</th>
-                      <th>PVC phase</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr :if={data.disk_rows == []}>
-                      <td colspan="9" class="text-center text-base-content/50 py-6">
+              <.pp_table_container>
+                <.pp_table dense>
+                  <.pp_table_head>
+                    <.pp_table_row>
+                      <.pp_table_cell variant="head">Disk</.pp_table_cell>
+                      <.pp_table_cell variant="head">Device</.pp_table_cell>
+                      <.pp_table_cell variant="head">Bus</.pp_table_cell>
+                      <.pp_table_cell variant="head">Boot</.pp_table_cell>
+                      <.pp_table_cell variant="head">Volume kind</.pp_table_cell>
+                      <.pp_table_cell variant="head">Source</.pp_table_cell>
+                      <.pp_table_cell variant="head">Size</.pp_table_cell>
+                      <.pp_table_cell variant="head">Storage class</.pp_table_cell>
+                      <.pp_table_cell variant="head">PVC phase</.pp_table_cell>
+                    </.pp_table_row>
+                  </.pp_table_head>
+                  <.pp_table_body>
+                    <.pp_table_row :if={data.disk_rows == []}>
+                      <.pp_table_cell colspan="9" align="center" class="text-pp-on-surface/50 py-6">
                         No disks defined.
-                      </td>
-                    </tr>
-                    <tr :for={row <- data.disk_rows} class="hover:bg-base-200/40">
-                      <td class="text-xs font-mono">{row.disk_name}</td>
-                      <td class="text-xs">{row.device_kind}</td>
-                      <td class="text-xs font-mono">{row.bus}</td>
-                      <td class="text-xs tabular-nums">{row.boot_order}</td>
-                      <td class="text-xs whitespace-nowrap">{row.volume_kind}</td>
-                      <td class="text-xs font-mono text-base-content/75">{row.source}</td>
-                      <td class="text-xs tabular-nums whitespace-nowrap">{row.size}</td>
-                      <td class="text-xs">{row.storage_class}</td>
-                      <td class="text-xs">{row.pvc_phase}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                      </.pp_table_cell>
+                    </.pp_table_row>
+                    <.pp_table_row :for={row <- data.disk_rows}>
+                      <.pp_table_cell class="text-xs font-mono">{row.disk_name}</.pp_table_cell>
+                      <.pp_table_cell class="text-xs">{row.device_kind}</.pp_table_cell>
+                      <.pp_table_cell class="text-xs font-mono">{row.bus}</.pp_table_cell>
+                      <.pp_table_cell class="text-xs tabular-nums">{row.boot_order}</.pp_table_cell>
+                      <.pp_table_cell class="text-xs whitespace-nowrap">
+                        {row.volume_kind}
+                      </.pp_table_cell>
+                      <.pp_table_cell class="text-xs font-mono text-pp-on-surface/75">
+                        {row.source}
+                      </.pp_table_cell>
+                      <.pp_table_cell class="text-xs tabular-nums whitespace-nowrap">
+                        {row.size}
+                      </.pp_table_cell>
+                      <.pp_table_cell class="text-xs">{row.storage_class}</.pp_table_cell>
+                      <.pp_table_cell class="text-xs">{row.pvc_phase}</.pp_table_cell>
+                    </.pp_table_row>
+                  </.pp_table_body>
+                </.pp_table>
+              </.pp_table_container>
             </div>
           </div>
         </.async_result>

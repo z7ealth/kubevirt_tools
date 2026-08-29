@@ -30,8 +30,17 @@
           setTheme(localStorage.getItem("phx:theme") || "system");
         }
         window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-        
+
         window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
+
+        // PhoenixPaper's <.pp_theme_toggle> flips `data-theme` on <html> directly
+        // (it has no persistence of its own) — mirror that into localStorage so
+        // the choice survives a reload.
+        new MutationObserver(() => {
+          const t = document.documentElement.getAttribute("data-theme");
+          if (t === "light" || t === "dark") localStorage.setItem("phx:theme", t);
+          else localStorage.removeItem("phx:theme");
+        }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
       })();
     </script>
   </head>

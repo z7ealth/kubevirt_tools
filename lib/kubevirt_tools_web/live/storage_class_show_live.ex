@@ -54,42 +54,41 @@ defmodule KubevirtToolsWeb.StorageClassShowLive do
       <div class="space-y-6 max-w-full min-w-0">
         <.link
           navigate={~p"/dashboard?tab=storage_classes"}
-          class="link link-hover text-sm text-base-content/60"
+          class="text-sm text-pp-primary hover:underline"
         >
           &larr; Back to Storage classes
         </.link>
 
         <.async_result :let={data} assign={@sc_detail}>
           <:loading>
-            <div class="flex items-center gap-3 rounded-xl border border-base-300/70 bg-base-200/40 px-5 py-12 text-base-content/70">
+            <.pp_paper
+              elevation={0}
+              class="flex items-center gap-3 border border-pp-outline/20 bg-pp-surface-variant/40 px-5 py-12 text-pp-on-surface/70"
+            >
               <.icon name="hero-arrow-path" class="size-6 motion-safe:animate-spin" />
               <span>Loading storage class…</span>
-            </div>
+            </.pp_paper>
           </:loading>
           <:failed :let={_failure}>
-            <div class="alert alert-error">
-              <.icon name="hero-exclamation-circle" class="size-5 shrink-0" />
-              <span>Could not load this storage class. Try refreshing or signing in again.</span>
-            </div>
+            <.pp_alert severity="error">
+              Could not load this storage class. Try refreshing or signing in again.
+            </.pp_alert>
           </:failed>
 
-          <div :if={!data.found?} class="alert alert-warning">
-            <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
-            <span>
-              StorageClass <span class="font-mono">{@name}</span>
-              was not found — it may have been deleted.
-            </span>
-          </div>
+          <.pp_alert :if={!data.found?} severity="warning">
+            StorageClass <span class="font-mono">{@name}</span>
+            was not found — it may have been deleted.
+          </.pp_alert>
 
           <div :if={data.found?} class="space-y-6">
             <div>
               <h1 class="text-2xl font-semibold tracking-tight flex items-center gap-3">
-                <.icon name="hero-archive-box" class="size-6 text-primary" /> {data.row.name}
-                <span :if={data.row.default?} class="badge badge-sm badge-primary">default</span>
+                <.icon name="hero-archive-box" class="size-6 text-pp-primary" /> {data.row.name}
+                <.pp_chip :if={data.row.default?} size="small" color="primary">default</.pp_chip>
               </h1>
             </div>
 
-            <div class="rounded-xl border border-base-300/70 bg-base-100 shadow-sm p-4">
+            <.pp_paper class="p-4">
               <.list>
                 <:item title="Provisioner">{data.row.provisioner}</:item>
                 <:item title="Reclaim policy">{data.row.reclaim}</:item>
@@ -104,39 +103,46 @@ defmodule KubevirtToolsWeb.StorageClassShowLive do
                 <:item title="PVCs using this class">{data.row.pvc_count}</:item>
                 <:item title="Parameters">{data.row.parameters_full}</:item>
               </.list>
-            </div>
+            </.pp_paper>
 
             <div class="space-y-3">
               <h2 class="text-lg font-medium flex items-center gap-2">
-                <.icon name="hero-circle-stack" class="size-5 text-primary" /> PVCs using this class
+                <.icon name="hero-circle-stack" class="size-5 text-pp-primary" />
+                PVCs using this class
               </h2>
-              <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-                <table class="table table-sm">
-                  <thead class="bg-base-200/60 text-base-content/80">
-                    <tr>
-                      <th>Namespace</th>
-                      <th>Name</th>
-                      <th>Phase</th>
-                      <th>Capacity</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr :if={data.pvcs == []}>
-                      <td colspan="4" class="text-center text-base-content/50 py-6">
+              <.pp_table_container>
+                <.pp_table dense>
+                  <.pp_table_head>
+                    <.pp_table_row>
+                      <.pp_table_cell variant="head">Namespace</.pp_table_cell>
+                      <.pp_table_cell variant="head">Name</.pp_table_cell>
+                      <.pp_table_cell variant="head">Phase</.pp_table_cell>
+                      <.pp_table_cell variant="head">Capacity</.pp_table_cell>
+                    </.pp_table_row>
+                  </.pp_table_head>
+                  <.pp_table_body>
+                    <.pp_table_row :if={data.pvcs == []}>
+                      <.pp_table_cell colspan="4" align="center" class="text-pp-on-surface/50 py-6">
                         No PVCs use this storage class.
-                      </td>
-                    </tr>
-                    <tr :for={pvc <- data.pvcs} class="hover:bg-base-200/40">
-                      <td class="font-mono text-xs">{vm_meta(pvc, :namespace)}</td>
-                      <td class="font-mono text-xs font-medium">{vm_meta(pvc, :name)}</td>
-                      <td class="text-xs">{get_in(pvc, ["status", "phase"]) || "—"}</td>
-                      <td class="text-xs font-mono">
+                      </.pp_table_cell>
+                    </.pp_table_row>
+                    <.pp_table_row :for={pvc <- data.pvcs}>
+                      <.pp_table_cell class="font-mono text-xs">
+                        {vm_meta(pvc, :namespace)}
+                      </.pp_table_cell>
+                      <.pp_table_cell class="font-mono text-xs font-medium">
+                        {vm_meta(pvc, :name)}
+                      </.pp_table_cell>
+                      <.pp_table_cell class="text-xs">
+                        {get_in(pvc, ["status", "phase"]) || "—"}
+                      </.pp_table_cell>
+                      <.pp_table_cell class="text-xs font-mono">
                         {get_in(pvc, ["status", "capacity", "storage"]) || "—"}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                      </.pp_table_cell>
+                    </.pp_table_row>
+                  </.pp_table_body>
+                </.pp_table>
+              </.pp_table_container>
             </div>
           </div>
         </.async_result>

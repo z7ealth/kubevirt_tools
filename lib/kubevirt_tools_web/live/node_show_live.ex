@@ -123,42 +123,41 @@ defmodule KubevirtToolsWeb.NodeShowLive do
       <div class="space-y-6 max-w-full min-w-0">
         <.link
           navigate={~p"/dashboard?tab=nodes"}
-          class="link link-hover text-sm text-base-content/60"
+          class="text-sm text-pp-primary hover:underline"
         >
           &larr; Back to Nodes
         </.link>
 
         <.async_result :let={data} assign={@node_detail}>
           <:loading>
-            <div class="flex items-center gap-3 rounded-xl border border-base-300/70 bg-base-200/40 px-5 py-12 text-base-content/70">
+            <.pp_paper
+              elevation={0}
+              class="flex items-center gap-3 border border-pp-outline/20 bg-pp-surface-variant/40 px-5 py-12 text-pp-on-surface/70"
+            >
               <.icon name="hero-arrow-path" class="size-6 motion-safe:animate-spin" />
               <span>Loading node…</span>
-            </div>
+            </.pp_paper>
           </:loading>
           <:failed :let={_failure}>
-            <div class="alert alert-error">
-              <.icon name="hero-exclamation-circle" class="size-5 shrink-0" />
-              <span>Could not load this node. Try refreshing or signing in again.</span>
-            </div>
+            <.pp_alert severity="error">
+              Could not load this node. Try refreshing or signing in again.
+            </.pp_alert>
           </:failed>
 
-          <div :if={!data.found?} class="alert alert-warning">
-            <.icon name="hero-exclamation-triangle" class="size-5 shrink-0" />
-            <span>
-              Node <span class="font-mono">{@name}</span> was not found — it may have been removed.
-            </span>
-          </div>
+          <.pp_alert :if={!data.found?} severity="warning">
+            Node <span class="font-mono">{@name}</span> was not found — it may have been removed.
+          </.pp_alert>
 
           <div :if={data.found?} class="space-y-6">
             <div>
               <h1 class="text-2xl font-semibold tracking-tight flex items-center gap-3">
-                <.icon name="hero-server-stack" class="size-6 text-primary" /> {data.row.name}
-                <span :if={data.row.is_ready} class="badge badge-sm badge-success">Ready</span>
-                <span :if={!data.row.is_ready} class="badge badge-sm badge-error">Not ready</span>
+                <.icon name="hero-server-stack" class="size-6 text-pp-primary" /> {data.row.name}
+                <.pp_chip :if={data.row.is_ready} size="small" color="success">Ready</.pp_chip>
+                <.pp_chip :if={!data.row.is_ready} size="small" color="error">Not ready</.pp_chip>
               </h1>
             </div>
 
-            <div class="rounded-xl border border-base-300/70 bg-base-100 shadow-sm p-4">
+            <.pp_paper class="p-4">
               <.list>
                 <:item title="Role">{data.row.role}</:item>
                 <:item title="OS">{data.row.os_image}</:item>
@@ -175,28 +174,26 @@ defmodule KubevirtToolsWeb.NodeShowLive do
                 <:item title="OS / arch">{data.row.os_arch}</:item>
                 <:item title="Container runtime">{data.row.runtime}</:item>
               </.list>
-            </div>
+            </.pp_paper>
 
-            <%
-              overlay_message =
-                "Requires Prometheus scraping node_exporter — set PROMETHEUS_URL (see README)"
+            <% overlay_message =
+              "Requires Prometheus scraping node_exporter — set PROMETHEUS_URL (see README)"
 
-              {cpu_points, mem_points, overlay} =
-                case @usage_history do
-                  %{ok?: true, result: {:ok, %{cpu_points: c, mem_points: m}}}
-                  when length(c) >= 2 ->
-                    {c, m, nil}
+            {cpu_points, mem_points, overlay} =
+              case @usage_history do
+                %{ok?: true, result: {:ok, %{cpu_points: c, mem_points: m}}}
+                when length(c) >= 2 ->
+                  {c, m, nil}
 
-                  %{ok?: true} ->
-                    {[], [], overlay_message}
+                %{ok?: true} ->
+                  {[], [], overlay_message}
 
-                  %{loading: l} when l not in [nil, false] ->
-                    {[], [], "Checking Prometheus…"}
+                %{loading: l} when l not in [nil, false] ->
+                  {[], [], "Checking Prometheus…"}
 
-                  _ ->
-                    {[], [], overlay_message}
-                end
-            %>
+                _ ->
+                  {[], [], overlay_message}
+              end %>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
               <.apex_chart
                 id={"node-cpu-usage-chart-#{@name}"}
@@ -221,42 +218,46 @@ defmodule KubevirtToolsWeb.NodeShowLive do
 
             <div class="space-y-3">
               <h2 class="text-lg font-medium flex items-center gap-2">
-                <.icon name="hero-cpu-chip" class="size-5 text-primary" /> VMs on this node
+                <.icon name="hero-cpu-chip" class="size-5 text-pp-primary" /> VMs on this node
               </h2>
-              <div class="overflow-x-auto rounded-xl border border-base-300/70 bg-base-100 shadow-sm">
-                <table class="table table-sm">
-                  <thead class="bg-base-200/60 text-base-content/80">
-                    <tr>
-                      <th>Namespace</th>
-                      <th>Name</th>
-                      <th>Phase</th>
-                      <th>Agent</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr :if={data.vmis == []}>
-                      <td colspan="4" class="text-center text-base-content/50 py-6">
+              <.pp_table_container>
+                <.pp_table dense>
+                  <.pp_table_head>
+                    <.pp_table_row>
+                      <.pp_table_cell variant="head">Namespace</.pp_table_cell>
+                      <.pp_table_cell variant="head">Name</.pp_table_cell>
+                      <.pp_table_cell variant="head">Phase</.pp_table_cell>
+                      <.pp_table_cell variant="head">Agent</.pp_table_cell>
+                    </.pp_table_row>
+                  </.pp_table_head>
+                  <.pp_table_body>
+                    <.pp_table_row :if={data.vmis == []}>
+                      <.pp_table_cell colspan="4" align="center" class="text-pp-on-surface/50 py-6">
                         No VMIs scheduled on this node.
-                      </td>
-                    </tr>
-                    <tr :for={vmi <- data.vmis} class="hover:bg-base-200/40">
-                      <td class="font-mono text-xs">{vm_meta(vmi, :namespace)}</td>
-                      <td class="font-mono text-xs font-medium">{vm_meta(vmi, :name)}</td>
-                      <td class="text-xs">
-                        <span class="badge badge-sm badge-ghost">{vmi_phase(vmi)}</span>
-                      </td>
-                      <td class="text-xs">
+                      </.pp_table_cell>
+                    </.pp_table_row>
+                    <.pp_table_row :for={vmi <- data.vmis}>
+                      <.pp_table_cell class="font-mono text-xs">
+                        {vm_meta(vmi, :namespace)}
+                      </.pp_table_cell>
+                      <.pp_table_cell class="font-mono text-xs font-medium">
+                        {vm_meta(vmi, :name)}
+                      </.pp_table_cell>
+                      <.pp_table_cell class="text-xs">
+                        <.pp_chip size="small">{vmi_phase(vmi)}</.pp_chip>
+                      </.pp_table_cell>
+                      <.pp_table_cell class="text-xs">
                         <.icon
                           :if={vmi_agent_connected?(vmi)}
                           name="hero-command-line"
-                          class="size-4 text-info"
+                          class="size-4 text-pp-info"
                         />
-                        <span :if={!vmi_agent_connected?(vmi)} class="text-base-content/40">—</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                        <span :if={!vmi_agent_connected?(vmi)} class="text-pp-on-surface/40">—</span>
+                      </.pp_table_cell>
+                    </.pp_table_row>
+                  </.pp_table_body>
+                </.pp_table>
+              </.pp_table_container>
             </div>
           </div>
         </.async_result>

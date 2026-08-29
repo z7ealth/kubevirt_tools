@@ -1,8 +1,11 @@
 defmodule KubevirtToolsWeb.TabComponents do
   @moduledoc """
-  [DaisyUI tabs](https://daisyui.com/components/tab/) driven by LiveView.
+  LiveView-driven tabs styled to match `PhoenixPaper.Tab`.
 
-  Pass a list of tab definitions and the current `active` id; tab switches use `phx-click`
+  Switching stays server-side (the dashboard needs `?tab=` deep links and
+  per-tab lazy content, which PhoenixPaper's client-only `pp_tabs` can't
+  express) — only the trigger styling comes from PhoenixPaper. Pass a list of
+  tab definitions and the current `active` id; tab switches use `phx-click`
   (default event `"set_tab"`) with `phx-value-tab` set to each tab's string id.
 
   ## Example
@@ -13,13 +16,14 @@ defmodule KubevirtToolsWeb.TabComponents do
   use Phoenix.Component
 
   @doc """
-  Tab triggers using DaisyUI `tabs` + `tabs-box` (boxed pill group).
+  Tab triggers styled like `PhoenixPaper.Tab` (an underline indicator on the
+  selected tab).
 
-  `tabs` is a list of maps: `%{id: atom | String.t(), label: String.t(), optional: :disabled => boolean}`.
+  `tabs` is a list of maps: `%{id: atom | String.t(), label: String.t(), optional :disabled => boolean}`.
 
-  Optional `variant`: `:box` (default), `:lift`, `:border` — maps to DaisyUI `tabs-box`, `tabs-lift`, `tabs-border`.
-
-  Optional `active_style`: `:default` (Daisy `tab-active` fill) or `:outline_primary` (`btn-outline btn-primary` on active).
+  `variant` is accepted for backwards compatibility but no longer changes the
+  look. `active_style`: `:default` (underline indicator) or `:outline_primary`
+  (a rounded pill group).
   """
   attr :id, :string, required: true, doc: "Stable id prefix for tab buttons and panels"
   attr :active, :atom, required: true, doc: "Currently selected tab id (atom)"
@@ -30,23 +34,7 @@ defmodule KubevirtToolsWeb.TabComponents do
   attr :class, :any, default: nil
 
   def daisy_tabs(assigns) do
-    outline? = assigns.active_style == :outline_primary
-
-    variant_class =
-      if outline? do
-        nil
-      else
-        case assigns.variant do
-          :box -> "tabs-box"
-          :lift -> "tabs-lift"
-          :border -> "tabs-border"
-        end
-      end
-
-    assigns =
-      assigns
-      |> assign(:outline_primary?, outline?)
-      |> assign(:variant_class, variant_class)
+    assigns = assign(assigns, :outline_primary?, assigns.active_style == :outline_primary)
 
     ~H"""
     <div
@@ -55,7 +43,7 @@ defmodule KubevirtToolsWeb.TabComponents do
         if @outline_primary? do
           ["flex flex-wrap items-center gap-1.5 sm:gap-2", @class]
         else
-          ["tabs", @variant_class, "w-full", "flex-wrap", "sm:flex-nowrap", "gap-0.5", @class]
+          ["flex w-full flex-wrap sm:flex-nowrap border-b border-pp-outline/20", @class]
         end
       }
       id={@id}
@@ -73,6 +61,7 @@ defmodule KubevirtToolsWeb.TabComponents do
           phx-click={unless disabled, do: @event}
           phx-value-tab={tid}
           disabled={disabled}
+          data-pp-component="tab"
           class={tab_trigger_classes(active, disabled, @outline_primary?)}
         >
           {t.label}
@@ -82,32 +71,29 @@ defmodule KubevirtToolsWeb.TabComponents do
     """
   end
 
+  @pill_base "inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
+  @tab_base "inline-flex items-center justify-center gap-2 shrink-0 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium cursor-pointer select-none transition-colors"
+
   defp tab_trigger_classes(_active, true, true),
-    do: [
-      "btn btn-sm shrink-0 whitespace-nowrap btn-ghost btn-disabled opacity-40 cursor-not-allowed"
-    ]
+    do: [@pill_base, "opacity-40 cursor-not-allowed text-pp-on-surface/50"]
 
   defp tab_trigger_classes(true, false, true),
-    do: ["btn btn-sm shrink-0 whitespace-nowrap btn-outline btn-primary"]
+    do: [@pill_base, "border border-pp-primary bg-pp-primary/10 text-pp-primary"]
 
   defp tab_trigger_classes(false, false, true),
-    do: [
-      "btn btn-sm shrink-0 whitespace-nowrap btn-ghost",
-      "text-base-content/65 hover:text-base-content",
-      "hover:bg-base-200/60 transition-colors"
-    ]
+    do: [@pill_base, "text-pp-on-surface/65 hover:text-pp-on-surface hover:bg-pp-on-surface/5"]
 
   defp tab_trigger_classes(true, false, false),
-    do: ["tab shrink-0 whitespace-nowrap tab-active"]
+    do: [@tab_base, "border-pp-primary text-pp-primary"]
 
   defp tab_trigger_classes(false, false, false),
-    do: ["tab shrink-0 whitespace-nowrap"]
+    do: [
+      @tab_base,
+      "border-transparent text-pp-on-surface/70 hover:text-pp-on-surface hover:bg-pp-on-surface/5"
+    ]
 
-  defp tab_trigger_classes(true, true, false),
-    do: ["tab shrink-0 whitespace-nowrap tab-active tab-disabled"]
-
-  defp tab_trigger_classes(false, true, false),
-    do: ["tab shrink-0 whitespace-nowrap tab-disabled"]
+  defp tab_trigger_classes(_active, true, false),
+    do: [@tab_base, "border-transparent text-pp-on-surface/40 opacity-40 cursor-not-allowed"]
 
   @doc """
   One tabpanel; show with `active == tab`. Links `aria-labelledby` to the matching `daisy_tabs` button.

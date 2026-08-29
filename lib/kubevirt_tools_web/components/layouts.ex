@@ -45,57 +45,65 @@ defmodule KubevirtToolsWeb.Layouts do
   def app(assigns) do
     ~H"""
     <div class="flex min-h-dvh flex-col">
-      <header class={[
-        "navbar shrink-0 border-b border-base-300/60 bg-base-100/90 backdrop-blur-md",
-        "px-4 sm:px-8 lg:px-14",
-        @navbar == :theme_only && "justify-end"
-      ]}>
-        <div :if={@navbar == :full} class="flex-1">
-          <.link navigate={~p"/"} class="flex w-fit items-center gap-3 group">
-            <img
-              src={~p"/images/kubevirt_tools_logo_no_bg.png"}
-              class="h-9 w-auto max-w-[10rem] shrink-0 object-contain object-left"
-              alt="KubeVirt Tools"
-            />
-            <div class="flex flex-col leading-tight">
-              <span class="text-sm font-semibold tracking-tight group-hover:text-primary transition-colors">
-                KubeVirt Tools
-              </span>
-              <span :if={@current_scope} class="text-xs text-base-content/55 tabular-nums">
-                v{KubevirtTools.version_string()}
-              </span>
-            </div>
+      <.pp_app_bar
+        position="sticky"
+        color="surface"
+        elevation={2}
+        class={[
+          "shrink-0 border-b border-base-300/60 backdrop-blur-md",
+          "[&>div]:h-16 [&>div]:px-4 sm:[&>div]:px-8 lg:[&>div]:px-14"
+        ]}
+      >
+        <.link
+          :if={@navbar == :full}
+          navigate={~p"/"}
+          class="flex w-fit items-center gap-3 group normal-case"
+        >
+          <img
+            src={~p"/images/kubevirt_tools_logo_no_bg.png"}
+            class="h-9 w-auto max-w-[10rem] shrink-0 object-contain object-left"
+            alt="KubeVirt Tools"
+          />
+          <span class="flex flex-col leading-tight">
+            <span class="text-sm font-semibold tracking-tight group-hover:text-pp-primary transition-colors">
+              KubeVirt Tools
+            </span>
+            <span :if={@current_scope} class="text-xs text-base-content/55 tabular-nums">
+              v{KubevirtTools.version_string()}
+            </span>
+          </span>
+        </.link>
+        <span :if={@navbar == :theme_only}>&nbsp;</span>
+
+        <:actions>
+          <.link
+            :if={@navbar == :full && @current_scope}
+            href="https://github.com/z7ealth/kubevirt_tools/issues"
+            class={nav_action_classes()}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open GitHub Issues"
+            id="navbar-github-issues-link"
+          >
+            <.icon name="hero-bug-ant" class="size-4 opacity-70" />
+            <span class="hidden sm:inline">Issues</span>
           </.link>
-        </div>
-        <div class="flex-none">
-          <ul class="flex items-center gap-1 sm:gap-2">
-            <li :if={@navbar == :full && @current_scope}>
-              <a
-                href="https://github.com/z7ealth/kubevirt_tools/issues"
-                class="btn btn-ghost btn-sm gap-1"
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Open GitHub Issues"
-                id="navbar-github-issues-link"
-              >
-                <.icon name="hero-bug-ant" class="size-4 opacity-70" />
-                <span class="hidden sm:inline">Issues</span>
-              </a>
-            </li>
-            <li :if={@navbar == :full && @current_scope}>
-              <.link href={~p"/session"} method="delete" class="btn btn-ghost btn-sm gap-1">
-                <.icon name="hero-arrow-right-on-rectangle" class="size-4 opacity-70" /> Sign out
-              </.link>
-            </li>
-            <li :if={@navbar == :full && !@current_scope}>
-              <.link navigate={~p"/login"} class="btn btn-primary btn-sm">Sign in</.link>
-            </li>
-            <li class={[@navbar == :full && "pl-2 border-l border-base-300/80"]}>
-              <.theme_toggle />
-            </li>
-          </ul>
-        </div>
-      </header>
+          <.link
+            :if={@navbar == :full && @current_scope}
+            href={~p"/session"}
+            method="delete"
+            class={nav_action_classes()}
+          >
+            <.icon name="hero-arrow-right-on-rectangle" class="size-4 opacity-70" /> Sign out
+          </.link>
+          <.link :if={@navbar == :full && !@current_scope} navigate={~p"/login"}>
+            <.pp_button color="primary" class="text-xs">Sign in</.pp_button>
+          </.link>
+          <span class={[@navbar == :full && "pl-2 ml-1 border-l border-base-300/80"]}>
+            <.theme_toggle />
+          </span>
+        </:actions>
+      </.pp_app_bar>
 
       <main class={[
         "flex min-h-0 flex-1 flex-col space-y-4 px-4 py-10 sm:px-8 lg:px-14 overflow-x-hidden",
@@ -189,33 +197,15 @@ defmodule KubevirtToolsWeb.Layouts do
   """
   def theme_toggle(assigns) do
     ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 transition-[left]" />
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
-      >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="light"
-      >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="dark"
-      >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-    </div>
+    <.pp_theme_toggle label={nil} />
     """
+  end
+
+  # A text/ghost button look for `<.link>`-based nav actions in the app bar,
+  # matching PhoenixPaper's `pp_button variant="text"` without nesting a
+  # <button> inside an <a>.
+  defp nav_action_classes do
+    "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium uppercase tracking-wide " <>
+      "text-pp-primary transition-colors hover:bg-pp-primary/10"
   end
 end

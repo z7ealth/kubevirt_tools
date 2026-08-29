@@ -5,7 +5,7 @@ defmodule KubevirtTools.MixProject do
     [
       app: :kubevirt_tools,
       version: "0.2.2",
-      elixir: "~> 1.15",
+      elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
@@ -45,6 +45,7 @@ defmodule KubevirtTools.MixProject do
     [
       {:phoenix, "~> 1.8.5"},
       {:phoenix_html, "~> 4.1"},
+      {:phoenix_paper, "~> 0.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.1.0"},
       {:lazy_html, ">= 0.1.0", only: :test},

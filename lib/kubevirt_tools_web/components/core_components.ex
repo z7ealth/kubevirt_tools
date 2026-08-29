@@ -2,36 +2,26 @@ defmodule KubevirtToolsWeb.CoreComponents do
   @moduledoc """
   Provides core UI components.
 
-  At first glance, this module may seem daunting, but its goal is to provide
-  core building blocks for your application, such as tables, forms, and
-  inputs. The components consist mostly of markup and are well-documented
-  with doc strings and declarative assigns. You may customize and style
-  them in any way you want, based on your application growth and needs.
+  These are thin wrappers over [PhoenixPaper](https://hexdocs.pm/phoenix_paper)
+  (`pp_*` Material Design function components) — the app's UI layer was migrated
+  to PhoenixPaper while keeping daisyUI installed for the charts, topology and
+  welcome-screen theming. See `assets/css/app.css` for how PhoenixPaper's
+  `--color-pp-*` tokens are pointed at the daisyUI (kubevirt teal) palette.
 
-  The foundation for styling is Tailwind CSS, a utility-first CSS framework,
-  augmented with daisyUI, a Tailwind CSS plugin that provides UI components
-  and themes. Here are useful references:
+  Useful references:
 
-    * [daisyUI](https://daisyui.com/docs/intro/) - a good place to get
-      started and see the available components.
-
-    * [Tailwind CSS](https://tailwindcss.com) - the foundational framework
-      we build on. You will use it for layout, sizing, flexbox, grid, and
-      spacing.
-
-    * [Heroicons](https://heroicons.com) - see `icon/1` for usage.
-
-    * [Phoenix.Component](https://hexdocs.pm/phoenix_live_view/Phoenix.Component.html) -
-      the component system used by Phoenix. Some components, such as `<.link>`
-      and `<.form>`, are defined there.
-
+    * [PhoenixPaper](https://hexdocs.pm/phoenix_paper) - the component library.
+    * [Tailwind CSS](https://tailwindcss.com) - layout / sizing / spacing.
+    * [Heroicons](https://heroicons.com) - see `icon/1`.
+    * [Phoenix.Component](https://hexdocs.pm/phoenix_live_view/Phoenix.Component.html)
   """
   use Phoenix.Component
+  use PhoenixPaper.Components
 
   alias Phoenix.LiveView.JS
 
   @doc """
-  Renders flash notices.
+  Renders flash notices as a PhoenixPaper alert in a top-end toast.
 
   ## Examples
 
@@ -61,32 +51,22 @@ defmodule KubevirtToolsWeb.CoreComponents do
         class="toast toast-top toast-end z-50"
         {@rest}
       >
-        <div class="relative w-80 sm:w-96 max-w-80 sm:max-w-96 overflow-hidden rounded-box border border-base-300/80 bg-base-100 text-base-content shadow-lg">
-          <div class="flex items-start gap-3 p-4 pr-2 text-wrap">
-            <.icon
-              :if={@kind == :info}
-              name="hero-information-circle"
-              class="size-5 shrink-0 text-info"
-            />
-            <.icon
-              :if={@kind == :error}
-              name="hero-exclamation-circle"
-              class="size-5 shrink-0 text-error"
-            />
-            <div class="min-w-0 flex-1">
-              <p :if={@title} class="font-semibold">{@title}</p>
-              <p>{msg}</p>
-            </div>
-            <button type="button" class="group shrink-0 cursor-pointer" aria-label="close">
-              <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
-            </button>
-          </div>
+        <div class="relative w-80 sm:w-96 max-w-80 sm:max-w-96 overflow-hidden">
+          <.pp_alert severity={severity(@kind)} variant="standard" class="shadow-lg pr-2">
+            <:title :if={@title}>{@title}</:title>
+            {msg}
+            <:action>
+              <button type="button" class="group shrink-0 cursor-pointer" aria-label="close">
+                <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+              </button>
+            </:action>
+          </.pp_alert>
           <div
             :if={@auto_dismiss}
-            class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-base-300/50"
+            class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-pp-on-surface/10"
             aria-hidden="true"
           >
-            <div class="flash-progress-bar-fill h-full w-full bg-primary" />
+            <div class="flash-progress-bar-fill h-full w-full bg-pp-primary" />
           </div>
         </div>
       </div>
@@ -137,8 +117,11 @@ defmodule KubevirtToolsWeb.CoreComponents do
     """
   end
 
+  defp severity(:info), do: "info"
+  defp severity(:error), do: "error"
+
   @doc """
-  Renders a button with navigation support.
+  Renders a button, backed by `PhoenixPaper.Button.pp_button/1`.
 
   ## Examples
 
@@ -146,73 +129,52 @@ defmodule KubevirtToolsWeb.CoreComponents do
       <.button phx-click="go" variant="primary">Send!</.button>
       <.button navigate={~p"/"}>Home</.button>
   """
-  attr :rest, :global, include: ~w(href navigate patch method download name value disabled)
-  attr :class, :any
-  attr :variant, :string, values: ~w(primary)
+  attr :rest, :global,
+    include: ~w(href navigate patch method download name value disabled type form)
+
+  attr :class, :any, default: nil
+  attr :variant, :string, default: nil, doc: ~s|"primary" for a raised button, nil for flat|
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
-    variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
-
     assigns =
-      assign_new(assigns, :class, fn ->
-        ["btn", Map.fetch!(variants, assigns[:variant])]
-      end)
+      assign(assigns, :pp_variant, if(assigns.variant == "primary", do: "raised", else: "flat"))
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
       ~H"""
-      <.link class={@class} {@rest}>
+      <.link
+        class={[
+          "inline-flex items-center justify-center gap-2 rounded-full px-6 py-2.5 text-sm font-medium uppercase tracking-wide",
+          "bg-pp-primary text-pp-on-primary transition hover:brightness-110",
+          @class
+        ]}
+        {@rest}
+      >
         {render_slot(@inner_block)}
       </.link>
       """
     else
       ~H"""
-      <button class={@class} {@rest}>
+      <.pp_button
+        variant={@pp_variant}
+        color="primary"
+        type={@rest[:type] || "button"}
+        disabled={!!@rest[:disabled]}
+        class={@class}
+        {Map.drop(@rest, [:type, :disabled, :href, :navigate, :patch, :method, :download])}
+      >
         {render_slot(@inner_block)}
-      </button>
+      </.pp_button>
       """
     end
   end
 
   @doc """
-  Renders an input with label and error messages.
+  Renders an input, backed by the PhoenixPaper form components.
 
-  A `Phoenix.HTML.FormField` may be passed as argument,
-  which is used to retrieve the input name, id, and values.
-  Otherwise all attributes may be passed explicitly.
-
-  ## Types
-
-  This function accepts all HTML input types, considering that:
-
-    * You may also set `type="select"` to render a `<select>` tag
-
-    * `type="checkbox"` is used exclusively to render boolean values
-
-    * For live file uploads, see `Phoenix.Component.live_file_input/1`
-
-  See https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input
-  for more information. Unsupported types, such as radio, are best
-  written directly in your templates.
-
-  ## Examples
-
-  ```heex
-  <.input field={@form[:email]} type="email" />
-  <.input name="my-input" errors={["oh no!"]} />
-  ```
-
-  ## Select type
-
-  When using `type="select"`, you must pass the `options` and optionally
-  a `value` to mark which option should be preselected.
-
-  ```heex
-  <.input field={@form[:user_type]} type="select" options={["Admin": "admin", "User": "user"]} />
-  ```
-
-  For more information on what kind of data can be passed to `options` see
-  [`options_for_select`](https://hexdocs.pm/phoenix_html/Phoenix.HTML.Form.html#options_for_select/2).
+  A `Phoenix.HTML.FormField` may be passed as `field`, otherwise pass `name`,
+  `value` and friends explicitly. `type="select"` renders `pp_select/1`,
+  `type="checkbox"` renders `pp_checkbox/1`, everything else `pp_input/1`.
   """
   attr :id, :any, default: nil
   attr :name, :any
@@ -230,14 +192,14 @@ defmodule KubevirtToolsWeb.CoreComponents do
   attr :errors, :list, default: []
   attr :checked, :boolean, doc: "the checked flag for checkbox inputs"
   attr :prompt, :string, default: nil, doc: "the prompt for select inputs"
-  attr :options, :list, doc: "the options to pass to Phoenix.HTML.Form.options_for_select/2"
+  attr :options, :list, doc: "the options to pass to pp_select/1"
   attr :multiple, :boolean, default: false, doc: "the multiple flag for select inputs"
-  attr :class, :any, default: nil, doc: "the input class to use over defaults"
-  attr :error_class, :any, default: nil, doc: "the input error class to use over defaults"
+  attr :class, :any, default: nil
+  attr :rows, :integer, default: 3
 
   attr :rest, :global,
     include: ~w(accept autocomplete capture cols disabled form list max maxlength min minlength
-                multiple pattern placeholder readonly required rows size step)
+                multiple pattern placeholder readonly required size step)
 
   def input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
     errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
@@ -263,27 +225,15 @@ defmodule KubevirtToolsWeb.CoreComponents do
       end)
 
     ~H"""
-    <div class="fieldset mb-2">
-      <label for={@id}>
-        <input
-          type="hidden"
-          name={@name}
-          value="false"
-          disabled={@rest[:disabled]}
-          form={@rest[:form]}
-        />
-        <span class="label">
-          <input
-            type="checkbox"
-            id={@id}
-            name={@name}
-            value="true"
-            checked={@checked}
-            class={@class || "checkbox checkbox-sm"}
-            {@rest}
-          />{@label}
-        </span>
-      </label>
+    <div class="mb-2">
+      <.pp_checkbox
+        id={@id}
+        name={@name}
+        label={@label}
+        checked={@checked}
+        disabled={!!@rest[:disabled]}
+        class={@class}
+      />
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
     """
@@ -291,72 +241,64 @@ defmodule KubevirtToolsWeb.CoreComponents do
 
   def input(%{type: "select"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
-      <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
-        <select
-          id={@id}
-          name={@name}
-          class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
-          multiple={@multiple}
-          {@rest}
-        >
-          <option :if={@prompt} value="">{@prompt}</option>
-          {Phoenix.HTML.Form.options_for_select(@options, @value)}
-        </select>
-      </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
+    <div class="mb-2">
+      <.pp_select
+        id={@id}
+        name={@name}
+        label={@label}
+        value={@value}
+        prompt={@prompt}
+        options={@options}
+        errors={@errors}
+        class={@class}
+        {@rest}
+      />
     </div>
     """
   end
 
   def input(%{type: "textarea"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
-      <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
-        <textarea
-          id={@id}
-          name={@name}
-          class={[
-            @class || "w-full textarea",
-            @errors != [] && (@error_class || "textarea-error")
-          ]}
-          {@rest}
-        >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
-      </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
+    <div class="mb-2">
+      <.pp_input
+        multiline
+        rows={@rows}
+        id={@id}
+        name={@name}
+        label={@label}
+        value={Phoenix.HTML.Form.normalize_value("textarea", @value)}
+        errors={@errors}
+        class={@class}
+        {@rest}
+      />
     </div>
     """
   end
 
-  # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
     ~H"""
-    <div class="fieldset mb-2">
-      <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
-        <input
-          type={@type}
-          name={@name}
-          id={@id}
-          value={Phoenix.HTML.Form.normalize_value(@type, @value)}
-          class={[
-            @class || "w-full input",
-            @errors != [] && (@error_class || "input-error")
-          ]}
-          {@rest}
-        />
-      </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
+    <div class="mb-2">
+      <.pp_input
+        type={@type}
+        id={@id}
+        name={@name}
+        label={@label}
+        value={Phoenix.HTML.Form.normalize_value(@type, @value)}
+        errors={@errors}
+        class={@class}
+        {@rest}
+      />
     </div>
     """
   end
 
   # Helper used by inputs to generate form errors
-  defp error(assigns) do
+  attr :rest, :global
+  slot :inner_block, required: true
+
+  def error(assigns) do
     ~H"""
-    <p class="mt-1.5 flex gap-2 items-center text-sm text-error">
+    <p class="mt-1.5 flex gap-2 items-center text-sm text-pp-error">
       <.icon name="hero-exclamation-circle" class="size-5" />
       {render_slot(@inner_block)}
     </p>
@@ -364,22 +306,23 @@ defmodule KubevirtToolsWeb.CoreComponents do
   end
 
   @doc """
-  Renders a header with title.
+  Renders a header with title, subtitle and actions.
   """
+  attr :class, :any, default: nil
   slot :inner_block, required: true
   slot :subtitle
   slot :actions
 
   def header(assigns) do
     ~H"""
-    <header class={[@actions != [] && "flex items-center justify-between gap-6", "pb-4"]}>
+    <header class={[@actions != [] && "flex items-center justify-between gap-6", "pb-4", @class]}>
       <div>
-        <h1 class="text-lg font-semibold leading-8">
+        <.pp_typography variant="h5" class="leading-8">
           {render_slot(@inner_block)}
-        </h1>
-        <p :if={@subtitle != []} class="text-sm text-base-content/70">
+        </.pp_typography>
+        <.pp_typography :if={@subtitle != []} variant="body2" class="text-pp-on-surface/70">
           {render_slot(@subtitle)}
-        </p>
+        </.pp_typography>
       </div>
       <div class="flex-none">{render_slot(@actions)}</div>
     </header>
@@ -387,7 +330,7 @@ defmodule KubevirtToolsWeb.CoreComponents do
   end
 
   @doc """
-  Renders a table with generic styling.
+  Renders a table, backed by the PhoenixPaper table components.
 
   ## Examples
 
@@ -418,34 +361,37 @@ defmodule KubevirtToolsWeb.CoreComponents do
       end
 
     ~H"""
-    <table class="table table-zebra">
-      <thead>
-        <tr>
-          <th :for={col <- @col}>{col[:label]}</th>
-          <th :if={@action != []}>
-            <span class="sr-only">Actions</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody id={@id} phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}>
-        <tr :for={row <- @rows} id={@row_id && @row_id.(row)}>
-          <td
-            :for={col <- @col}
-            phx-click={@row_click && @row_click.(row)}
-            class={@row_click && "hover:cursor-pointer"}
-          >
-            {render_slot(col, @row_item.(row))}
-          </td>
-          <td :if={@action != []} class="w-0 font-semibold">
-            <div class="flex gap-4">
-              <%= for action <- @action do %>
-                {render_slot(action, @row_item.(row))}
-              <% end %>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <.pp_table_container>
+      <.pp_table dense>
+        <.pp_table_head>
+          <.pp_table_row>
+            <.pp_table_cell :for={col <- @col} variant="head">{col[:label]}</.pp_table_cell>
+            <.pp_table_cell :if={@action != []} variant="head">
+              <span class="sr-only">Actions</span>
+            </.pp_table_cell>
+          </.pp_table_row>
+        </.pp_table_head>
+        <.pp_table_body
+          id={@id}
+          phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}
+        >
+          <.pp_table_row :for={row <- @rows} id={@row_id && @row_id.(row)}>
+            <.pp_table_cell
+              :for={col <- @col}
+              phx-click={@row_click && @row_click.(row)}
+              class={@row_click && "hover:cursor-pointer"}
+            >
+              {render_slot(col, @row_item.(row))}
+            </.pp_table_cell>
+            <.pp_table_cell :if={@action != []} class="w-0 font-semibold">
+              <div class="flex gap-4">
+                {for action <- @action, do: render_slot(action, @row_item.(row))}
+              </div>
+            </.pp_table_cell>
+          </.pp_table_row>
+        </.pp_table_body>
+      </.pp_table>
+    </.pp_table_container>
     """
   end
 
@@ -466,7 +412,7 @@ defmodule KubevirtToolsWeb.CoreComponents do
   def list(assigns) do
     ~H"""
     <ul class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-3 list-none p-0 m-0">
-      <li :for={item <- @item} class="border-b border-base-300/60 pb-2">
+      <li :for={item <- @item} class="border-b border-pp-outline/30 pb-2">
         <div class="font-bold">{item.title}</div>
         <div>{render_slot(item)}</div>
       </li>
@@ -477,15 +423,8 @@ defmodule KubevirtToolsWeb.CoreComponents do
   @doc """
   Renders a [Heroicon](https://heroicons.com).
 
-  Heroicons come in three styles – outline, solid, and mini.
-  By default, the outline style is used, but solid and mini may
-  be applied by using the `-solid` and `-mini` suffix.
-
-  You can customize the size and colors of the icons by setting
-  width, height, and background color classes.
-
-  Icons are extracted from the `deps/heroicons` directory and bundled within
-  your compiled app.css by the plugin in `assets/vendor/heroicons.js`.
+  Heroicons come in three styles – outline, solid, and mini. By default the
+  outline style is used; `-solid` and `-mini` suffixes switch styles.
 
   ## Examples
 
@@ -525,18 +464,9 @@ defmodule KubevirtToolsWeb.CoreComponents do
   end
 
   @doc """
-  Translates an error message using gettext.
+  Translates an error message.
   """
   def translate_error({msg, opts}) do
-    # You can make use of gettext to translate error messages by
-    # uncommenting and adjusting the following code:
-
-    # if count = opts[:count] do
-    #   Gettext.dngettext(KubevirtToolsWeb.Gettext, "errors", msg, msg, count, opts)
-    # else
-    #   Gettext.dgettext(KubevirtToolsWeb.Gettext, "errors", msg, opts)
-    # end
-
     Enum.reduce(opts, msg, fn {key, value}, acc ->
       String.replace(acc, "%{#{key}}", fn _ -> to_string(value) end)
     end)
