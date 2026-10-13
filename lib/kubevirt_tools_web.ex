@@ -85,6 +85,7 @@ defmodule KubevirtToolsWeb do
       import KubevirtToolsWeb.CoreComponents
       import KubevirtToolsWeb.ChartComponents
       import KubevirtToolsWeb.TabComponents
+      import KubevirtToolsWeb.PaginationComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

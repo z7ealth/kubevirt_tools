@@ -9,6 +9,7 @@ defmodule KubevirtToolsWeb.StorageClassShowLive do
   alias KubevirtTools.ClusterInventory
   alias KubevirtTools.K8sConn
   alias KubevirtTools.K8sSafeError
+  alias KubevirtToolsWeb.PaginationComponents
 
   @impl true
   def mount(%{"name" => name}, _session, socket) do
@@ -18,6 +19,7 @@ defmodule KubevirtToolsWeb.StorageClassShowLive do
       socket
       |> assign(:page_title, "StorageClass: #{name}")
       |> assign(:name, name)
+      |> assign(:pagination, PaginationComponents.new(["pvcs"]))
 
     {:ok, assign_async(socket, :sc_detail, fn -> load_sc_detail(token, name) end)}
   end
@@ -45,6 +47,12 @@ defmodule KubevirtToolsWeb.StorageClassShowLive do
       :error -> {:error, :invalid_session}
       {:error, reason} -> {:error, K8sSafeError.user_facing(reason)}
     end
+  end
+
+  @impl true
+  def handle_event(event, params, socket) when event in ["set_page", "set_per_page"] do
+    {:noreply,
+     update(socket, :pagination, &PaginationComponents.handle_pagination_event(&1, event, params))}
   end
 
   @impl true
@@ -100,43 +108,50 @@ defmodule KubevirtToolsWeb.StorageClassShowLive do
 
             <div class="space-y-3">
               <.section_title icon="hero-circle-stack">PVCs using this class</.section_title>
-              <.pp_table_container>
-                <.pp_table>
-                  <.pp_table_head>
-                    <.pp_table_row>
-                      <.pp_table_cell variant="head">Namespace</.pp_table_cell>
-                      <.pp_table_cell variant="head">Name</.pp_table_cell>
-                      <.pp_table_cell variant="head">Phase</.pp_table_cell>
-                      <.pp_table_cell variant="head">Capacity</.pp_table_cell>
-                    </.pp_table_row>
-                  </.pp_table_head>
-                  <.pp_table_body>
-                    <.pp_table_row :if={data.pvcs == []}>
-                      <.pp_table_cell
-                        colspan="4"
-                        align="center"
-                        class="py-8 text-pp-on-surface-variant"
-                      >
-                        No PVCs use this storage class.
-                      </.pp_table_cell>
-                    </.pp_table_row>
-                    <.pp_table_row :for={pvc <- data.pvcs}>
-                      <.pp_table_cell class="font-mono text-pp-on-surface-variant">
-                        {vm_meta(pvc, :namespace)}
-                      </.pp_table_cell>
-                      <.pp_table_cell class="font-mono font-medium">
-                        {vm_meta(pvc, :name)}
-                      </.pp_table_cell>
-                      <.pp_table_cell>
-                        <% pvc_phase = get_in(pvc, ["status", "phase"]) || "—" %>
-                        <.status_chip tone={pvc_phase_tone(pvc_phase)}>{pvc_phase}</.status_chip>
-                      </.pp_table_cell>
-                      <.pp_table_cell class="font-mono tabular-nums">
-                        {get_in(pvc, ["status", "capacity", "storage"]) || "—"}
-                      </.pp_table_cell>
-                    </.pp_table_row>
-                  </.pp_table_body>
-                </.pp_table>
+              <.pp_table_container class="!overflow-visible">
+                <div class="overflow-x-auto rounded-t-pp-md">
+                  <.pp_table>
+                    <.pp_table_head>
+                      <.pp_table_row>
+                        <.pp_table_cell variant="head">Namespace</.pp_table_cell>
+                        <.pp_table_cell variant="head">Name</.pp_table_cell>
+                        <.pp_table_cell variant="head">Phase</.pp_table_cell>
+                        <.pp_table_cell variant="head">Capacity</.pp_table_cell>
+                      </.pp_table_row>
+                    </.pp_table_head>
+                    <.pp_table_body>
+                      <.pp_table_row :if={data.pvcs == []}>
+                        <.pp_table_cell
+                          colspan="4"
+                          align="center"
+                          class="py-8 text-pp-on-surface-variant"
+                        >
+                          No PVCs use this storage class.
+                        </.pp_table_cell>
+                      </.pp_table_row>
+                      <.pp_table_row :for={pvc <- paginate(data.pvcs, @pagination["pvcs"]).rows}>
+                        <.pp_table_cell class="font-mono text-pp-on-surface-variant">
+                          {vm_meta(pvc, :namespace)}
+                        </.pp_table_cell>
+                        <.pp_table_cell class="font-mono font-medium">
+                          {vm_meta(pvc, :name)}
+                        </.pp_table_cell>
+                        <.pp_table_cell>
+                          <% pvc_phase = get_in(pvc, ["status", "phase"]) || "—" %>
+                          <.status_chip tone={pvc_phase_tone(pvc_phase)}>{pvc_phase}</.status_chip>
+                        </.pp_table_cell>
+                        <.pp_table_cell class="font-mono tabular-nums">
+                          {get_in(pvc, ["status", "capacity", "storage"]) || "—"}
+                        </.pp_table_cell>
+                      </.pp_table_row>
+                    </.pp_table_body>
+                  </.pp_table>
+                </div>
+                <.table_pager
+                  id="pvcs-pagination"
+                  key="pvcs"
+                  page={paginate(data.pvcs, @pagination["pvcs"])}
+                />
               </.pp_table_container>
             </div>
           </div>

@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.2
+
+- **Paginated tables**: the VMs, Networks, Disks, Storage classes and Nodes tables, plus a node's VMIs and a storage class's PVCs, now show 25 rows per page by default (10/25/50/100) with PhoenixPaper's MD3 table pagination. Each dashboard tab keeps its own page; changing its filters, search or sort goes back to page 1. This cuts what each render sends to the browser on large clusters — the app still fetches the full lists, since the overview, charts, topology, filters and sort need them.
+- **Node status like `kubectl get nodes`**: the Nodes table's *Ready* (Yes/No) column is now *Status* — `Ready`, `NotReady` or `Unknown`, plus `,SchedulingDisabled` for cordoned nodes (e.g. `Ready,SchedulingDisabled`), with a matching icon (ready / cordoned / not ready). Sortable and filterable; the node detail page shows the same status.
+
 ## v0.3.1
 
 - **OpenShift application launcher**: `install.sh` now adds KubeVirt Tools to the web console's app menu (grid icon → *OpenShift Virtualization*, next to tools like OVTools) with a `ConsoleLink` pointing at the Route. Needs cluster-admin; `--no-console-link` skips it and `uninstall.sh` removes it. Existing installs get it by re-running `install.sh`.

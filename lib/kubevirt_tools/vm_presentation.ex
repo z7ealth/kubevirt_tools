@@ -299,6 +299,35 @@ defmodule KubevirtTools.VmPresentation do
     get_in(node, ["spec", "unschedulable"]) == true
   end
 
+  @doc """
+  The node's status as `kubectl get nodes` prints it: the Ready condition
+  (`Ready` when True, `NotReady` when False or Unknown, `Unknown` when the
+  node reports no Ready condition), plus `SchedulingDisabled` when the node
+  is cordoned — e.g. `"Ready,SchedulingDisabled"`.
+  """
+  @spec node_status(map()) :: String.t()
+  def node_status(node) do
+    conditions = get_in(node, ["status", "conditions"]) || []
+
+    ready =
+      case Enum.find(conditions, &(&1["type"] == "Ready")) do
+        nil -> "Unknown"
+        %{"status" => "True"} -> "Ready"
+        _ -> "NotReady"
+      end
+
+    if node_cordoned?(node), do: ready <> ",SchedulingDisabled", else: ready
+  end
+
+  @doc """
+  Status tone for `node_status/1`: `:ok` Ready, `:warning` Ready but
+  cordoned, `:error` NotReady or Unknown.
+  """
+  @spec node_status_tone(String.t()) :: :ok | :warning | :error
+  def node_status_tone("Ready"), do: :ok
+  def node_status_tone("Ready," <> _), do: :warning
+  def node_status_tone(_status), do: :error
+
   def node_scheduling_counts(nodes) do
     Enum.reduce(nodes, {0, 0, 0}, fn node, {sched, cord, down} ->
       ready = node_ready?(node)
@@ -1357,6 +1386,7 @@ defmodule KubevirtTools.VmPresentation do
     %{
       name: name,
       is_ready: ready,
+      status: node_status(node),
       scheduling: kubernetes_node_scheduling_label(node),
       scheduling_hint: kubernetes_node_not_ready_hint(node),
       role: kubernetes_node_role_label(node),

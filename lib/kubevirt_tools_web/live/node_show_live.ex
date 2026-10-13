@@ -10,6 +10,7 @@ defmodule KubevirtToolsWeb.NodeShowLive do
   alias KubevirtTools.DashboardCharts
   alias KubevirtTools.K8sConn
   alias KubevirtTools.K8sSafeError
+  alias KubevirtToolsWeb.PaginationComponents
   alias KubevirtTools.KubeVirt
   alias KubevirtTools.PrometheusClient
 
@@ -29,6 +30,7 @@ defmodule KubevirtToolsWeb.NodeShowLive do
       socket
       |> assign(:page_title, "Node: #{name}")
       |> assign(:name, name)
+      |> assign(:pagination, PaginationComponents.new(["vmis"]))
 
     if connected?(socket), do: Process.send_after(self(), :poll_usage, poll_ms())
 
@@ -117,6 +119,12 @@ defmodule KubevirtToolsWeb.NodeShowLive do
   end
 
   @impl true
+  def handle_event(event, params, socket) when event in ["set_page", "set_per_page"] do
+    {:noreply,
+     update(socket, :pagination, &PaginationComponents.handle_pagination_event(&1, event, params))}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={%{}}>
@@ -145,8 +153,9 @@ defmodule KubevirtToolsWeb.NodeShowLive do
             <.page_title icon="hero-server-stack">
               {data.row.name}
               <:chips>
-                <.status_chip :if={data.row.is_ready} tone={:ok}>Ready</.status_chip>
-                <.status_chip :if={!data.row.is_ready} tone={:error}>Not ready</.status_chip>
+                <.status_chip tone={node_status_tone(data.row.status)}>
+                  {data.row.status}
+                </.status_chip>
               </:chips>
             </.page_title>
 
@@ -209,57 +218,64 @@ defmodule KubevirtToolsWeb.NodeShowLive do
 
             <div class="space-y-3">
               <.section_title icon="hero-cpu-chip">VMs on this node</.section_title>
-              <.pp_table_container>
-                <.pp_table>
-                  <.pp_table_head>
-                    <.pp_table_row>
-                      <.pp_table_cell variant="head">Namespace</.pp_table_cell>
-                      <.pp_table_cell variant="head">Name</.pp_table_cell>
-                      <.pp_table_cell variant="head">Phase</.pp_table_cell>
-                      <.pp_table_cell variant="head">Agent</.pp_table_cell>
-                    </.pp_table_row>
-                  </.pp_table_head>
-                  <.pp_table_body>
-                    <.pp_table_row :if={data.vmis == []}>
-                      <.pp_table_cell
-                        colspan="4"
-                        align="center"
-                        class="py-8 text-pp-on-surface-variant"
+              <.pp_table_container class="!overflow-visible">
+                <div class="overflow-x-auto rounded-t-pp-md">
+                  <.pp_table>
+                    <.pp_table_head>
+                      <.pp_table_row>
+                        <.pp_table_cell variant="head">Namespace</.pp_table_cell>
+                        <.pp_table_cell variant="head">Name</.pp_table_cell>
+                        <.pp_table_cell variant="head">Phase</.pp_table_cell>
+                        <.pp_table_cell variant="head">Agent</.pp_table_cell>
+                      </.pp_table_row>
+                    </.pp_table_head>
+                    <.pp_table_body>
+                      <.pp_table_row :if={data.vmis == []}>
+                        <.pp_table_cell
+                          colspan="4"
+                          align="center"
+                          class="py-8 text-pp-on-surface-variant"
+                        >
+                          No VMIs scheduled on this node.
+                        </.pp_table_cell>
+                      </.pp_table_row>
+                      <.pp_table_row
+                        :for={vmi <- paginate(data.vmis, @pagination["vmis"]).rows}
+                        class="cursor-pointer"
+                        phx-click={
+                          JS.navigate(~p"/vms/#{vm_meta(vmi, :namespace)}/#{vm_meta(vmi, :name)}")
+                        }
                       >
-                        No VMIs scheduled on this node.
-                      </.pp_table_cell>
-                    </.pp_table_row>
-                    <.pp_table_row
-                      :for={vmi <- data.vmis}
-                      class="cursor-pointer"
-                      phx-click={
-                        JS.navigate(~p"/vms/#{vm_meta(vmi, :namespace)}/#{vm_meta(vmi, :name)}")
-                      }
-                    >
-                      <.pp_table_cell class="font-mono text-pp-on-surface-variant">
-                        {vm_meta(vmi, :namespace)}
-                      </.pp_table_cell>
-                      <.pp_table_cell class="font-mono font-medium">
-                        {vm_meta(vmi, :name)}
-                      </.pp_table_cell>
-                      <.pp_table_cell>
-                        <.status_chip tone={phase_tone(vmi_phase(vmi))}>
-                          {vmi_phase(vmi)}
-                        </.status_chip>
-                      </.pp_table_cell>
-                      <.pp_table_cell>
-                        <.icon
-                          :if={vmi_agent_connected?(vmi)}
-                          name="hero-command-line"
-                          class="size-5 text-pp-primary"
-                        />
-                        <span :if={!vmi_agent_connected?(vmi)} class="text-pp-on-surface-variant">
-                          —
-                        </span>
-                      </.pp_table_cell>
-                    </.pp_table_row>
-                  </.pp_table_body>
-                </.pp_table>
+                        <.pp_table_cell class="font-mono text-pp-on-surface-variant">
+                          {vm_meta(vmi, :namespace)}
+                        </.pp_table_cell>
+                        <.pp_table_cell class="font-mono font-medium">
+                          {vm_meta(vmi, :name)}
+                        </.pp_table_cell>
+                        <.pp_table_cell>
+                          <.status_chip tone={phase_tone(vmi_phase(vmi))}>
+                            {vmi_phase(vmi)}
+                          </.status_chip>
+                        </.pp_table_cell>
+                        <.pp_table_cell>
+                          <.icon
+                            :if={vmi_agent_connected?(vmi)}
+                            name="hero-command-line"
+                            class="size-5 text-pp-primary"
+                          />
+                          <span :if={!vmi_agent_connected?(vmi)} class="text-pp-on-surface-variant">
+                            —
+                          </span>
+                        </.pp_table_cell>
+                      </.pp_table_row>
+                    </.pp_table_body>
+                  </.pp_table>
+                </div>
+                <.table_pager
+                  id="vmis-pagination"
+                  key="vmis"
+                  page={paginate(data.vmis, @pagination["vmis"])}
+                />
               </.pp_table_container>
             </div>
           </div>

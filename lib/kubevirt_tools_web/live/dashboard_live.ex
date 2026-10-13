@@ -17,6 +17,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   alias KubevirtTools.PrometheusClient
   alias KubevirtTools.PrometheusMetricsServer
   alias KubevirtTools.PrometheusSetup
+  alias KubevirtToolsWeb.PaginationComponents
 
   import VmPresentation
 
@@ -30,7 +31,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     "networks" => %{"search" => "", "binding" => "", "vmi_phase" => ""},
     "disks" => %{"search" => "", "volume_kind" => "", "storage_class" => "", "pvc_phase" => ""},
     "storage_classes" => %{"search" => "", "provisioner" => ""},
-    "nodes" => %{"search" => "", "ready" => "", "role" => "", "os" => ""}
+    "nodes" => %{"search" => "", "status" => "", "role" => "", "os" => ""}
   }
 
   # Per-tab column sort. `nil` means "no active sort" (rows keep their
@@ -55,6 +56,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       |> assign(:prometheus_live, nil)
       |> assign(:filters, @default_filters)
       |> assign(:sort, @default_sort)
+      |> assign(:pagination, PaginationComponents.new(Map.keys(@default_sort)))
 
     socket =
       if connected?(socket) do
@@ -90,13 +92,21 @@ defmodule KubevirtToolsWeb.DashboardLive do
   @impl true
   def handle_event("set_filter", %{"tab" => tab, "field" => field, "value" => value}, socket) do
     filters = put_in(socket.assigns.filters, [tab, field], value)
-    {:noreply, assign(socket, :filters, filters)}
+
+    {:noreply,
+     socket
+     |> assign(:filters, filters)
+     |> update(:pagination, &PaginationComponents.reset_page(&1, tab))}
   end
 
   @impl true
   def handle_event("clear_filters", %{"tab" => tab}, socket) do
     filters = Map.put(socket.assigns.filters, tab, Map.fetch!(@default_filters, tab))
-    {:noreply, assign(socket, :filters, filters)}
+
+    {:noreply,
+     socket
+     |> assign(:filters, filters)
+     |> update(:pagination, &PaginationComponents.reset_page(&1, tab))}
   end
 
   @impl true
@@ -108,7 +118,16 @@ defmodule KubevirtToolsWeb.DashboardLive do
         _ -> {field, :asc}
       end
 
-    {:noreply, assign(socket, :sort, Map.put(socket.assigns.sort, tab, next))}
+    {:noreply,
+     socket
+     |> assign(:sort, Map.put(socket.assigns.sort, tab, next))
+     |> update(:pagination, &PaginationComponents.reset_page(&1, tab))}
+  end
+
+  @impl true
+  def handle_event(event, params, socket) when event in ["set_page", "set_per_page"] do
+    {:noreply,
+     update(socket, :pagination, &PaginationComponents.handle_pagination_event(&1, event, params))}
   end
 
   defp tab_atom_from_string(tab, default) do
@@ -455,6 +474,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                         pod_metrics={List.wrap(data.pod_metrics)}
                         filters={@filters["vms"]}
                         sort={@sort["vms"]}
+                        pagination={@pagination["vms"]}
                         empty_label="No VirtualMachines found."
                         id_prefix="vm"
                       />
@@ -505,6 +525,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       vmis={if(data.vmi_error, do: [], else: data.vmis)}
                       filters={@filters["networks"]}
                       sort={@sort["networks"]}
+                      pagination={@pagination["networks"]}
                       id_prefix="vm-net"
                     />
                   <% end %>
@@ -540,6 +561,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       pvcs={List.wrap(data.pvcs)}
                       filters={@filters["disks"]}
                       sort={@sort["disks"]}
+                      pagination={@pagination["disks"]}
                       id_prefix="vm-disk"
                     />
                   <% end %>
@@ -575,6 +597,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       pvcs={List.wrap(data.pvcs)}
                       filters={@filters["storage_classes"]}
                       sort={@sort["storage_classes"]}
+                      pagination={@pagination["storage_classes"]}
                       id_prefix="storage-class"
                     />
                   <% end %>
@@ -619,6 +642,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
                       prometheus_node_detail={m.prometheus_node_detail}
                       filters={@filters["nodes"]}
                       sort={@sort["nodes"]}
+                      pagination={@pagination["nodes"]}
                       id_prefix="node"
                     />
                   <% end %>
@@ -1082,6 +1106,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :pod_metrics, :list, default: []
   attr :filters, :map, default: %{}
   attr :sort, :any, default: nil
+  attr :pagination, :map, required: true
   attr :empty_label, :string, required: true
   attr :id_prefix, :string, required: true
 
@@ -1114,6 +1139,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     assigns =
       assigns
       |> assign(:rows, rows)
+      |> assign(:page, paginate(rows, assigns.pagination))
       |> assign(
         :filter_specs,
         [
@@ -1132,132 +1158,135 @@ defmodule KubevirtToolsWeb.DashboardLive do
         specs={@filter_specs}
         search_placeholder="Search by name or IP…"
       />
-      <.pp_table_container>
-        <.pp_table>
-          <.pp_table_head>
-            <.pp_table_row>
-              <.sortable_th tab="vms" field="name" sort={@sort}>Name</.sortable_th>
-              <.sortable_th tab="vms" field="phase" sort={@sort}>Phase</.sortable_th>
-              <.sortable_th
-                tab="vms"
-                field="cpu"
-                sort={@sort}
-                title="Used / configured — used comes from metrics-server on the virt-launcher pod"
-              >
-                CPU
-              </.sortable_th>
-              <.sortable_th
-                tab="vms"
-                field="memory"
-                sort={@sort}
-                title="Used / configured — used comes from metrics-server on the virt-launcher pod"
-              >
-                Memory
-              </.sortable_th>
-              <.sortable_th tab="vms" field="node" sort={@sort}>Node</.sortable_th>
-              <.sortable_th tab="vms" field="ip" sort={@sort}>IP</.sortable_th>
-              <.sortable_th tab="vms" field="agent" sort={@sort} title="QEMU guest agent connected">
-                Agent
-              </.sortable_th>
-              <.sortable_th
-                tab="vms"
-                field="os"
-                sort={@sort}
-                title="Guest-reported OS (qemu-guest-agent)"
-              >
-                OS
-              </.sortable_th>
-              <.sortable_th tab="vms" field="created" sort={@sort}>Created</.sortable_th>
-            </.pp_table_row>
-          </.pp_table_head>
-          <.pp_table_body>
-            <.pp_table_row :if={@rows == []}>
-              <.pp_table_cell colspan="9" align="center" class="py-8 text-pp-on-surface-variant">
-                {if(@items == [], do: @empty_label, else: "No VMs match the current filters.")}
-              </.pp_table_cell>
-            </.pp_table_row>
-            <%= for {row, i} <- Enum.with_index(@rows) do %>
-              <.pp_table_row
-                id={"#{@id_prefix}-row-#{i}"}
-                class="cursor-pointer"
-                phx-click={JS.navigate(~p"/vms/#{row.namespace}/#{row.name}")}
-              >
-                <.pp_table_cell class="whitespace-nowrap">
-                  <div class="font-medium">{row.name}</div>
-                  <div class="font-mono pp-body-small text-pp-on-surface-variant">
-                    {row.namespace}
-                  </div>
-                </.pp_table_cell>
-                <.pp_table_cell>
-                  <.status_chip tone={row.phase_tone}>{row.phase}</.status_chip>
-                </.pp_table_cell>
-                <.pp_table_cell
-                  class="tabular-nums font-medium"
-                  title={
-                    if(row.usage_unavailable?,
-                      do: "Usage unavailable — no metrics-server data for this VM's pod yet",
-                      else: "sockets × cores × threads"
-                    )
-                  }
+      <.pp_table_container class="!overflow-visible">
+        <div class="overflow-x-auto rounded-t-pp-md">
+          <.pp_table>
+            <.pp_table_head>
+              <.pp_table_row>
+                <.sortable_th tab="vms" field="name" sort={@sort}>Name</.sortable_th>
+                <.sortable_th tab="vms" field="phase" sort={@sort}>Phase</.sortable_th>
+                <.sortable_th
+                  tab="vms"
+                  field="cpu"
+                  sort={@sort}
+                  title="Used / configured — used comes from metrics-server on the virt-launcher pod"
                 >
-                  {row.cpu_display}
-                  <span
-                    :if={row.cpu_pct}
-                    class={["ml-1", tone_text_class(usage_pct_tone(row.cpu_pct))]}
-                  >
-                    {row.cpu_pct}%
-                  </span>
-                </.pp_table_cell>
-                <.pp_table_cell
-                  class="font-mono text-pp-on-surface-variant"
-                  title={
-                    if(row.usage_unavailable?,
-                      do: "Usage unavailable — no metrics-server data for this VM's pod yet",
-                      else: nil
-                    )
-                  }
+                  CPU
+                </.sortable_th>
+                <.sortable_th
+                  tab="vms"
+                  field="memory"
+                  sort={@sort}
+                  title="Used / configured — used comes from metrics-server on the virt-launcher pod"
                 >
-                  {row.mem_display}
-                  <span
-                    :if={row.mem_pct}
-                    class={["ml-1", tone_text_class(usage_pct_tone(row.mem_pct))]}
-                  >
-                    {row.mem_pct}%
-                  </span>
-                </.pp_table_cell>
-                <.pp_table_cell
-                  class="font-mono text-pp-on-surface-variant max-w-[10rem] truncate"
-                  title={row.node}
+                  Memory
+                </.sortable_th>
+                <.sortable_th tab="vms" field="node" sort={@sort}>Node</.sortable_th>
+                <.sortable_th tab="vms" field="ip" sort={@sort}>IP</.sortable_th>
+                <.sortable_th tab="vms" field="agent" sort={@sort} title="QEMU guest agent connected">
+                  Agent
+                </.sortable_th>
+                <.sortable_th
+                  tab="vms"
+                  field="os"
+                  sort={@sort}
+                  title="Guest-reported OS (qemu-guest-agent)"
                 >
-                  {row.node}
-                </.pp_table_cell>
-                <.pp_table_cell
-                  class="font-mono text-pp-on-surface-variant max-w-[9rem] truncate"
-                  title={row.ip}
-                >
-                  {row.ip}
-                </.pp_table_cell>
-                <.pp_table_cell>
-                  <span :if={row.agent_connected?} class="font-medium text-pp-primary">
-                    Running
-                  </span>
-                  <span :if={!row.agent_connected?} class="font-medium text-stopped">
-                    Not running
-                  </span>
-                </.pp_table_cell>
-                <.pp_table_cell
-                  class="text-pp-on-surface-variant max-w-[10rem] truncate"
-                  title={row.os}
-                >
-                  {row.os}
-                </.pp_table_cell>
-                <.pp_table_cell class="text-pp-on-surface-variant whitespace-nowrap">
-                  {row.created}
+                  OS
+                </.sortable_th>
+                <.sortable_th tab="vms" field="created" sort={@sort}>Created</.sortable_th>
+              </.pp_table_row>
+            </.pp_table_head>
+            <.pp_table_body>
+              <.pp_table_row :if={@rows == []}>
+                <.pp_table_cell colspan="9" align="center" class="py-8 text-pp-on-surface-variant">
+                  {if(@items == [], do: @empty_label, else: "No VMs match the current filters.")}
                 </.pp_table_cell>
               </.pp_table_row>
-            <% end %>
-          </.pp_table_body>
-        </.pp_table>
+              <%= for {row, i} <- Enum.with_index(@page.rows) do %>
+                <.pp_table_row
+                  id={"#{@id_prefix}-row-#{i}"}
+                  class="cursor-pointer"
+                  phx-click={JS.navigate(~p"/vms/#{row.namespace}/#{row.name}")}
+                >
+                  <.pp_table_cell class="whitespace-nowrap">
+                    <div class="font-medium">{row.name}</div>
+                    <div class="font-mono pp-body-small text-pp-on-surface-variant">
+                      {row.namespace}
+                    </div>
+                  </.pp_table_cell>
+                  <.pp_table_cell>
+                    <.status_chip tone={row.phase_tone}>{row.phase}</.status_chip>
+                  </.pp_table_cell>
+                  <.pp_table_cell
+                    class="tabular-nums font-medium"
+                    title={
+                      if(row.usage_unavailable?,
+                        do: "Usage unavailable — no metrics-server data for this VM's pod yet",
+                        else: "sockets × cores × threads"
+                      )
+                    }
+                  >
+                    {row.cpu_display}
+                    <span
+                      :if={row.cpu_pct}
+                      class={["ml-1", tone_text_class(usage_pct_tone(row.cpu_pct))]}
+                    >
+                      {row.cpu_pct}%
+                    </span>
+                  </.pp_table_cell>
+                  <.pp_table_cell
+                    class="font-mono text-pp-on-surface-variant"
+                    title={
+                      if(row.usage_unavailable?,
+                        do: "Usage unavailable — no metrics-server data for this VM's pod yet",
+                        else: nil
+                      )
+                    }
+                  >
+                    {row.mem_display}
+                    <span
+                      :if={row.mem_pct}
+                      class={["ml-1", tone_text_class(usage_pct_tone(row.mem_pct))]}
+                    >
+                      {row.mem_pct}%
+                    </span>
+                  </.pp_table_cell>
+                  <.pp_table_cell
+                    class="font-mono text-pp-on-surface-variant max-w-[10rem] truncate"
+                    title={row.node}
+                  >
+                    {row.node}
+                  </.pp_table_cell>
+                  <.pp_table_cell
+                    class="font-mono text-pp-on-surface-variant max-w-[9rem] truncate"
+                    title={row.ip}
+                  >
+                    {row.ip}
+                  </.pp_table_cell>
+                  <.pp_table_cell>
+                    <span :if={row.agent_connected?} class="font-medium text-pp-primary">
+                      Running
+                    </span>
+                    <span :if={!row.agent_connected?} class="font-medium text-stopped">
+                      Not running
+                    </span>
+                  </.pp_table_cell>
+                  <.pp_table_cell
+                    class="text-pp-on-surface-variant max-w-[10rem] truncate"
+                    title={row.os}
+                  >
+                    {row.os}
+                  </.pp_table_cell>
+                  <.pp_table_cell class="text-pp-on-surface-variant whitespace-nowrap">
+                    {row.created}
+                  </.pp_table_cell>
+                </.pp_table_row>
+              <% end %>
+            </.pp_table_body>
+          </.pp_table>
+        </div>
+        <.table_pager id="vms-pagination" key="vms" page={@page} />
       </.pp_table_container>
     </div>
     """
@@ -1359,6 +1388,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :vmis, :list, default: []
   attr :filters, :map, default: %{}
   attr :sort, :any, default: nil
+  attr :pagination, :map, required: true
   attr :id_prefix, :string, required: true
 
   defp virtual_machine_network_interfaces_table(assigns) do
@@ -1379,6 +1409,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     assigns =
       assigns
       |> assign(:rows, rows)
+      |> assign(:page, paginate(rows, assigns.pagination))
       |> assign(:all_rows_empty?, all_rows == [])
       |> assign(
         :filter_specs,
@@ -1404,57 +1435,60 @@ defmodule KubevirtToolsWeb.DashboardLive do
         specs={@filter_specs}
         search_placeholder="Search by VM name or IP…"
       />
-      <.pp_table_container>
-        <.pp_table>
-          <.pp_table_head>
-            <.pp_table_row>
-              <.sortable_th tab="networks" field="vm" sort={@sort}>VM</.sortable_th>
-              <.sortable_th tab="networks" field="interface" sort={@sort}>Interface</.sortable_th>
-              <.sortable_th tab="networks" field="binding" sort={@sort}>Binding</.sortable_th>
-              <.sortable_th tab="networks" field="ips" sort={@sort}>IP addresses</.sortable_th>
-              <.sortable_th tab="networks" field="vmi_phase" sort={@sort}>VMI phase</.sortable_th>
-            </.pp_table_row>
-          </.pp_table_head>
-          <.pp_table_body>
-            <.pp_table_row :if={@rows == []}>
-              <.pp_table_cell colspan="5" align="center" class="py-8 text-pp-on-surface-variant">
-                {if(@all_rows_empty?,
-                  do: "No network interfaces defined on any VirtualMachine.",
-                  else: "No interfaces match the current filters."
-                )}
-              </.pp_table_cell>
-            </.pp_table_row>
-            <%= for {row, i} <- Enum.with_index(@rows) do %>
-              <.pp_table_row
-                id={"#{@id_prefix}-row-#{i}"}
-                class="cursor-pointer"
-                phx-click={
-                  JS.navigate(~p"/networks/#{row.namespace}/#{row.vm_name}/#{row.iface_name}")
-                }
-              >
-                <.pp_table_cell class="whitespace-nowrap">
-                  <div class="font-medium">{row.vm_name}</div>
-                  <div class="font-mono pp-body-small text-pp-on-surface-variant">
-                    {row.namespace}
-                  </div>
-                </.pp_table_cell>
-                <.pp_table_cell class="font-mono text-pp-on-surface-variant">
-                  {row.iface_name}
-                </.pp_table_cell>
-                <.pp_table_cell class="whitespace-nowrap">{row.binding}</.pp_table_cell>
-                <.pp_table_cell
-                  class="font-mono text-pp-on-surface-variant max-w-[14rem] truncate"
-                  title={row.ips}
-                >
-                  {row.ips}
-                </.pp_table_cell>
-                <.pp_table_cell>
-                  <.status_chip tone={phase_tone(row.vmi_phase)}>{row.vmi_phase}</.status_chip>
+      <.pp_table_container class="!overflow-visible">
+        <div class="overflow-x-auto rounded-t-pp-md">
+          <.pp_table>
+            <.pp_table_head>
+              <.pp_table_row>
+                <.sortable_th tab="networks" field="vm" sort={@sort}>VM</.sortable_th>
+                <.sortable_th tab="networks" field="interface" sort={@sort}>Interface</.sortable_th>
+                <.sortable_th tab="networks" field="binding" sort={@sort}>Binding</.sortable_th>
+                <.sortable_th tab="networks" field="ips" sort={@sort}>IP addresses</.sortable_th>
+                <.sortable_th tab="networks" field="vmi_phase" sort={@sort}>VMI phase</.sortable_th>
+              </.pp_table_row>
+            </.pp_table_head>
+            <.pp_table_body>
+              <.pp_table_row :if={@rows == []}>
+                <.pp_table_cell colspan="5" align="center" class="py-8 text-pp-on-surface-variant">
+                  {if(@all_rows_empty?,
+                    do: "No network interfaces defined on any VirtualMachine.",
+                    else: "No interfaces match the current filters."
+                  )}
                 </.pp_table_cell>
               </.pp_table_row>
-            <% end %>
-          </.pp_table_body>
-        </.pp_table>
+              <%= for {row, i} <- Enum.with_index(@page.rows) do %>
+                <.pp_table_row
+                  id={"#{@id_prefix}-row-#{i}"}
+                  class="cursor-pointer"
+                  phx-click={
+                    JS.navigate(~p"/networks/#{row.namespace}/#{row.vm_name}/#{row.iface_name}")
+                  }
+                >
+                  <.pp_table_cell class="whitespace-nowrap">
+                    <div class="font-medium">{row.vm_name}</div>
+                    <div class="font-mono pp-body-small text-pp-on-surface-variant">
+                      {row.namespace}
+                    </div>
+                  </.pp_table_cell>
+                  <.pp_table_cell class="font-mono text-pp-on-surface-variant">
+                    {row.iface_name}
+                  </.pp_table_cell>
+                  <.pp_table_cell class="whitespace-nowrap">{row.binding}</.pp_table_cell>
+                  <.pp_table_cell
+                    class="font-mono text-pp-on-surface-variant max-w-[14rem] truncate"
+                    title={row.ips}
+                  >
+                    {row.ips}
+                  </.pp_table_cell>
+                  <.pp_table_cell>
+                    <.status_chip tone={phase_tone(row.vmi_phase)}>{row.vmi_phase}</.status_chip>
+                  </.pp_table_cell>
+                </.pp_table_row>
+              <% end %>
+            </.pp_table_body>
+          </.pp_table>
+        </div>
+        <.table_pager id="networks-pagination" key="networks" page={@page} />
       </.pp_table_container>
     </div>
     """
@@ -1470,6 +1504,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :pvcs, :list, default: []
   attr :filters, :map, default: %{}
   attr :sort, :any, default: nil
+  attr :pagination, :map, required: true
   attr :id_prefix, :string, required: true
 
   defp virtual_machine_disks_detail_table(assigns) do
@@ -1491,6 +1526,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     assigns =
       assigns
       |> assign(:rows, rows)
+      |> assign(:page, paginate(rows, assigns.pagination))
       |> assign(:all_rows_empty?, all_rows == [])
       |> assign(
         :filter_specs,
@@ -1516,56 +1552,59 @@ defmodule KubevirtToolsWeb.DashboardLive do
     ~H"""
     <div class="space-y-2">
       <.table_filter_bar tab="disks" filters={@filters} specs={@filter_specs} />
-      <.pp_table_container>
-        <.pp_table>
-          <.pp_table_head>
-            <.pp_table_row>
-              <.sortable_th tab="disks" field="vm" sort={@sort}>VM</.sortable_th>
-              <.sortable_th tab="disks" field="disk" sort={@sort}>Disk</.sortable_th>
-              <.sortable_th tab="disks" field="volume_kind" sort={@sort}>Volume kind</.sortable_th>
-              <.sortable_th tab="disks" field="size" sort={@sort}>Size</.sortable_th>
-              <.sortable_th tab="disks" field="storage_class" sort={@sort}>
-                Storage class
-              </.sortable_th>
-              <.sortable_th tab="disks" field="pvc_phase" sort={@sort}>PVC phase</.sortable_th>
-            </.pp_table_row>
-          </.pp_table_head>
-          <.pp_table_body>
-            <.pp_table_row :if={@rows == []}>
-              <.pp_table_cell colspan="6" align="center" class="py-8 text-pp-on-surface-variant">
-                {if(@all_rows_empty?,
-                  do: "No disks defined on any VirtualMachine.",
-                  else: "No disks match the current filters."
-                )}
-              </.pp_table_cell>
-            </.pp_table_row>
-            <%= for {row, i} <- Enum.with_index(@rows) do %>
-              <.pp_table_row
-                id={"#{@id_prefix}-row-#{i}"}
-                class="cursor-pointer"
-                phx-click={JS.navigate(~p"/disks/#{row.namespace}/#{row.vm_name}/#{row.disk_name}")}
-              >
-                <.pp_table_cell class="whitespace-nowrap">
-                  <div class="font-medium">{row.vm_name}</div>
-                  <div class="font-mono pp-body-small text-pp-on-surface-variant">
-                    {row.namespace}
-                  </div>
-                </.pp_table_cell>
-                <.pp_table_cell class="font-mono text-pp-on-surface-variant">
-                  {row.disk_name}
-                </.pp_table_cell>
-                <.pp_table_cell class="whitespace-nowrap">{row.volume_kind}</.pp_table_cell>
-                <.pp_table_cell class="tabular-nums whitespace-nowrap">{row.size}</.pp_table_cell>
-                <.pp_table_cell class="max-w-[8rem] truncate" title={row.storage_class}>
-                  {row.storage_class}
-                </.pp_table_cell>
-                <.pp_table_cell>
-                  <.status_chip tone={pvc_phase_tone(row.pvc_phase)}>{row.pvc_phase}</.status_chip>
+      <.pp_table_container class="!overflow-visible">
+        <div class="overflow-x-auto rounded-t-pp-md">
+          <.pp_table>
+            <.pp_table_head>
+              <.pp_table_row>
+                <.sortable_th tab="disks" field="vm" sort={@sort}>VM</.sortable_th>
+                <.sortable_th tab="disks" field="disk" sort={@sort}>Disk</.sortable_th>
+                <.sortable_th tab="disks" field="volume_kind" sort={@sort}>Volume kind</.sortable_th>
+                <.sortable_th tab="disks" field="size" sort={@sort}>Size</.sortable_th>
+                <.sortable_th tab="disks" field="storage_class" sort={@sort}>
+                  Storage class
+                </.sortable_th>
+                <.sortable_th tab="disks" field="pvc_phase" sort={@sort}>PVC phase</.sortable_th>
+              </.pp_table_row>
+            </.pp_table_head>
+            <.pp_table_body>
+              <.pp_table_row :if={@rows == []}>
+                <.pp_table_cell colspan="6" align="center" class="py-8 text-pp-on-surface-variant">
+                  {if(@all_rows_empty?,
+                    do: "No disks defined on any VirtualMachine.",
+                    else: "No disks match the current filters."
+                  )}
                 </.pp_table_cell>
               </.pp_table_row>
-            <% end %>
-          </.pp_table_body>
-        </.pp_table>
+              <%= for {row, i} <- Enum.with_index(@page.rows) do %>
+                <.pp_table_row
+                  id={"#{@id_prefix}-row-#{i}"}
+                  class="cursor-pointer"
+                  phx-click={JS.navigate(~p"/disks/#{row.namespace}/#{row.vm_name}/#{row.disk_name}")}
+                >
+                  <.pp_table_cell class="whitespace-nowrap">
+                    <div class="font-medium">{row.vm_name}</div>
+                    <div class="font-mono pp-body-small text-pp-on-surface-variant">
+                      {row.namespace}
+                    </div>
+                  </.pp_table_cell>
+                  <.pp_table_cell class="font-mono text-pp-on-surface-variant">
+                    {row.disk_name}
+                  </.pp_table_cell>
+                  <.pp_table_cell class="whitespace-nowrap">{row.volume_kind}</.pp_table_cell>
+                  <.pp_table_cell class="tabular-nums whitespace-nowrap">{row.size}</.pp_table_cell>
+                  <.pp_table_cell class="max-w-[8rem] truncate" title={row.storage_class}>
+                    {row.storage_class}
+                  </.pp_table_cell>
+                  <.pp_table_cell>
+                    <.status_chip tone={pvc_phase_tone(row.pvc_phase)}>{row.pvc_phase}</.status_chip>
+                  </.pp_table_cell>
+                </.pp_table_row>
+              <% end %>
+            </.pp_table_body>
+          </.pp_table>
+        </div>
+        <.table_pager id="disks-pagination" key="disks" page={@page} />
       </.pp_table_container>
     </div>
     """
@@ -1582,6 +1621,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :pvcs, :list, required: true
   attr :filters, :map, default: %{}
   attr :sort, :any, default: nil
+  attr :pagination, :map, required: true
   attr :id_prefix, :string, required: true
 
   defp storage_classes_table(assigns) do
@@ -1606,6 +1646,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
     assigns =
       assigns
       |> assign(:rows, rows)
+      |> assign(:page, paginate(rows, assigns.pagination))
       |> assign(:all_rows_empty?, all_rows == [])
       |> assign(:orphan_refs, orphan_refs)
       |> assign(:unset_count, unset_count)
@@ -1635,61 +1676,66 @@ defmodule KubevirtToolsWeb.DashboardLive do
     </div>
     <div class="space-y-2">
       <.table_filter_bar tab="storage_classes" filters={@filters} specs={@filter_specs} />
-      <.pp_table_container>
-        <.pp_table>
-          <.pp_table_head>
-            <.pp_table_row>
-              <.sortable_th tab="storage_classes" field="name" sort={@sort}>Name</.sortable_th>
-              <.sortable_th tab="storage_classes" field="default" sort={@sort}>Default</.sortable_th>
-              <.sortable_th tab="storage_classes" field="provisioner" sort={@sort}>
-                Provisioner
-              </.sortable_th>
-              <.sortable_th
-                tab="storage_classes"
-                field="pvcs"
-                sort={@sort}
-                title="PVCs in the cluster using this storageClassName"
-              >
-                PVCs
-              </.sortable_th>
-            </.pp_table_row>
-          </.pp_table_head>
-          <.pp_table_body>
-            <.pp_table_row :if={@rows == []}>
-              <.pp_table_cell colspan="4" align="center" class="py-8 text-pp-on-surface-variant">
-                {if(@all_rows_empty?,
-                  do: "No StorageClass objects returned from the API.",
-                  else: "No storage classes match the current filters."
-                )}
-              </.pp_table_cell>
-            </.pp_table_row>
-            <%= for {row, i} <- Enum.with_index(@rows) do %>
-              <.pp_table_row
-                id={"#{@id_prefix}-row-#{i}"}
-                class="cursor-pointer"
-                phx-click={JS.navigate(~p"/storage_classes/#{row.name}")}
-              >
-                <.pp_table_cell class="font-mono font-medium whitespace-nowrap">
-                  {row.name}
-                </.pp_table_cell>
-                <.pp_table_cell>
-                  <%= if row.default? do %>
-                    <.status_chip icon="hero-star-mini" selected>default</.status_chip>
-                  <% else %>
-                    <span class="text-pp-on-surface-variant">—</span>
-                  <% end %>
-                </.pp_table_cell>
-                <.pp_table_cell
-                  class="font-mono text-pp-on-surface-variant max-w-[14rem] truncate"
-                  title={row.provisioner}
+      <.pp_table_container class="!overflow-visible">
+        <div class="overflow-x-auto rounded-t-pp-md">
+          <.pp_table>
+            <.pp_table_head>
+              <.pp_table_row>
+                <.sortable_th tab="storage_classes" field="name" sort={@sort}>Name</.sortable_th>
+                <.sortable_th tab="storage_classes" field="default" sort={@sort}>
+                  Default
+                </.sortable_th>
+                <.sortable_th tab="storage_classes" field="provisioner" sort={@sort}>
+                  Provisioner
+                </.sortable_th>
+                <.sortable_th
+                  tab="storage_classes"
+                  field="pvcs"
+                  sort={@sort}
+                  title="PVCs in the cluster using this storageClassName"
                 >
-                  {row.provisioner}
-                </.pp_table_cell>
-                <.pp_table_cell class="tabular-nums font-medium">{row.pvc_count}</.pp_table_cell>
+                  PVCs
+                </.sortable_th>
               </.pp_table_row>
-            <% end %>
-          </.pp_table_body>
-        </.pp_table>
+            </.pp_table_head>
+            <.pp_table_body>
+              <.pp_table_row :if={@rows == []}>
+                <.pp_table_cell colspan="4" align="center" class="py-8 text-pp-on-surface-variant">
+                  {if(@all_rows_empty?,
+                    do: "No StorageClass objects returned from the API.",
+                    else: "No storage classes match the current filters."
+                  )}
+                </.pp_table_cell>
+              </.pp_table_row>
+              <%= for {row, i} <- Enum.with_index(@page.rows) do %>
+                <.pp_table_row
+                  id={"#{@id_prefix}-row-#{i}"}
+                  class="cursor-pointer"
+                  phx-click={JS.navigate(~p"/storage_classes/#{row.name}")}
+                >
+                  <.pp_table_cell class="font-mono font-medium whitespace-nowrap">
+                    {row.name}
+                  </.pp_table_cell>
+                  <.pp_table_cell>
+                    <%= if row.default? do %>
+                      <.status_chip icon="hero-star-mini" selected>default</.status_chip>
+                    <% else %>
+                      <span class="text-pp-on-surface-variant">—</span>
+                    <% end %>
+                  </.pp_table_cell>
+                  <.pp_table_cell
+                    class="font-mono text-pp-on-surface-variant max-w-[14rem] truncate"
+                    title={row.provisioner}
+                  >
+                    {row.provisioner}
+                  </.pp_table_cell>
+                  <.pp_table_cell class="tabular-nums font-medium">{row.pvc_count}</.pp_table_cell>
+                </.pp_table_row>
+              <% end %>
+            </.pp_table_body>
+          </.pp_table>
+        </div>
+        <.table_pager id="storage_classes-pagination" key="storage_classes" page={@page} />
       </.pp_table_container>
     </div>
     <.banner
@@ -1716,6 +1762,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
   attr :prometheus_node_detail, :map, default: %{}
   attr :filters, :map, default: %{}
   attr :sort, :any, default: nil
+  attr :pagination, :map, required: true
   attr :id_prefix, :string, required: true
 
   defp nodes_table(assigns) do
@@ -1734,7 +1781,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
       |> Enum.filter(&node_row_matches_filters?(&1, filters))
       |> sort_rows(assigns.sort, %{
         "name" => & &1.name,
-        "ready" => & &1.is_ready,
+        "status" => & &1.status,
         "role" => & &1.role,
         "vmis" => & &1.vmi_count,
         "cpu" => &pct_sort_value(&1.cpu_pct),
@@ -1745,11 +1792,12 @@ defmodule KubevirtToolsWeb.DashboardLive do
     assigns =
       assigns
       |> assign(:rows, rows)
+      |> assign(:page, paginate(rows, assigns.pagination))
       |> assign(:all_rows_empty?, all_rows == [])
       |> assign(
         :filter_specs,
         [
-          %{field: "ready", label: "Ready", options: ["Yes", "No"]},
+          %{field: "status", label: "Status", options: distinct_present(all_rows, & &1.status)},
           %{field: "role", label: "Role", options: distinct_present(all_rows, & &1.role)},
           %{field: "os", label: "OS", options: distinct_present(all_rows, & &1.os_image)}
         ]
@@ -1758,75 +1806,81 @@ defmodule KubevirtToolsWeb.DashboardLive do
     ~H"""
     <div class="space-y-2">
       <.table_filter_bar tab="nodes" filters={@filters} specs={@filter_specs} />
-      <.pp_table_container>
-        <.pp_table>
-          <.pp_table_head>
-            <.pp_table_row>
-              <.sortable_th tab="nodes" field="name" sort={@sort}>Name</.sortable_th>
-              <.sortable_th tab="nodes" field="ready" sort={@sort}>Ready</.sortable_th>
-              <.sortable_th tab="nodes" field="role" sort={@sort}>Role</.sortable_th>
-              <.sortable_th tab="nodes" field="os" sort={@sort}>OS</.sortable_th>
-              <.sortable_th tab="nodes" field="vmis" sort={@sort}>VMIs</.sortable_th>
-              <.sortable_th
-                tab="nodes"
-                field="cpu"
-                sort={@sort}
-                title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target"
-              >
-                CPU %
-              </.sortable_th>
-              <.sortable_th
-                tab="nodes"
-                field="mem"
-                sort={@sort}
-                title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target"
-              >
-                Mem %
-              </.sortable_th>
-            </.pp_table_row>
-          </.pp_table_head>
-          <.pp_table_body>
-            <.pp_table_row :if={@rows == []}>
-              <.pp_table_cell colspan="7" align="center" class="py-8 text-pp-on-surface-variant">
-                {if(@all_rows_empty?,
-                  do: "No nodes returned from the API.",
-                  else: "No nodes match the current filters."
-                )}
-              </.pp_table_cell>
-            </.pp_table_row>
-            <%= for {row, i} <- Enum.with_index(@rows) do %>
-              <.pp_table_row
-                id={"#{@id_prefix}-row-#{i}"}
-                class="cursor-pointer"
-                title={row.scheduling_hint}
-                phx-click={JS.navigate(~p"/nodes/#{row.name}")}
-              >
-                <.pp_table_cell class="font-mono font-medium whitespace-nowrap">
-                  {row.name}
-                </.pp_table_cell>
-                <.pp_table_cell>
-                  <%= if row.is_ready do %>
-                    <.status_chip tone={:ok}>Yes</.status_chip>
-                  <% else %>
-                    <.status_chip tone={:error}>No</.status_chip>
-                  <% end %>
-                </.pp_table_cell>
-                <.pp_table_cell>
-                  <.status_chip class="font-mono">{row.role}</.status_chip>
-                </.pp_table_cell>
-                <.pp_table_cell
-                  class="text-pp-on-surface-variant max-w-[12rem] truncate"
-                  title={row.os_image}
+      <.pp_table_container class="!overflow-visible">
+        <div class="overflow-x-auto rounded-t-pp-md">
+          <.pp_table>
+            <.pp_table_head>
+              <.pp_table_row>
+                <.sortable_th tab="nodes" field="name" sort={@sort}>Name</.sortable_th>
+                <.sortable_th
+                  tab="nodes"
+                  field="status"
+                  sort={@sort}
+                  title="As kubectl get nodes: the Ready condition, plus SchedulingDisabled when cordoned"
                 >
-                  {row.os_image}
-                </.pp_table_cell>
-                <.pp_table_cell class="tabular-nums font-medium">{row.vmi_count}</.pp_table_cell>
-                <.pp_table_cell class="tabular-nums">{row.cpu_pct}</.pp_table_cell>
-                <.pp_table_cell class="tabular-nums">{row.mem_pct}</.pp_table_cell>
+                  Status
+                </.sortable_th>
+                <.sortable_th tab="nodes" field="role" sort={@sort}>Role</.sortable_th>
+                <.sortable_th tab="nodes" field="os" sort={@sort}>OS</.sortable_th>
+                <.sortable_th tab="nodes" field="vmis" sort={@sort}>VMIs</.sortable_th>
+                <.sortable_th
+                  tab="nodes"
+                  field="cpu"
+                  sort={@sort}
+                  title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target"
+                >
+                  CPU %
+                </.sortable_th>
+                <.sortable_th
+                  tab="nodes"
+                  field="mem"
+                  sort={@sort}
+                  title="metrics-server (usage / allocatable) when available; else Prometheus node_exporter per target"
+                >
+                  Mem %
+                </.sortable_th>
               </.pp_table_row>
-            <% end %>
-          </.pp_table_body>
-        </.pp_table>
+            </.pp_table_head>
+            <.pp_table_body>
+              <.pp_table_row :if={@rows == []}>
+                <.pp_table_cell colspan="7" align="center" class="py-8 text-pp-on-surface-variant">
+                  {if(@all_rows_empty?,
+                    do: "No nodes returned from the API.",
+                    else: "No nodes match the current filters."
+                  )}
+                </.pp_table_cell>
+              </.pp_table_row>
+              <%= for {row, i} <- Enum.with_index(@page.rows) do %>
+                <.pp_table_row
+                  id={"#{@id_prefix}-row-#{i}"}
+                  class="cursor-pointer"
+                  title={row.scheduling_hint}
+                  phx-click={JS.navigate(~p"/nodes/#{row.name}")}
+                >
+                  <.pp_table_cell class="font-mono font-medium whitespace-nowrap">
+                    {row.name}
+                  </.pp_table_cell>
+                  <.pp_table_cell>
+                    <.status_chip tone={node_status_tone(row.status)}>{row.status}</.status_chip>
+                  </.pp_table_cell>
+                  <.pp_table_cell>
+                    <.status_chip class="font-mono">{row.role}</.status_chip>
+                  </.pp_table_cell>
+                  <.pp_table_cell
+                    class="text-pp-on-surface-variant max-w-[12rem] truncate"
+                    title={row.os_image}
+                  >
+                    {row.os_image}
+                  </.pp_table_cell>
+                  <.pp_table_cell class="tabular-nums font-medium">{row.vmi_count}</.pp_table_cell>
+                  <.pp_table_cell class="tabular-nums">{row.cpu_pct}</.pp_table_cell>
+                  <.pp_table_cell class="tabular-nums">{row.mem_pct}</.pp_table_cell>
+                </.pp_table_row>
+              <% end %>
+            </.pp_table_body>
+          </.pp_table>
+        </div>
+        <.table_pager id="nodes-pagination" key="nodes" page={@page} />
       </.pp_table_container>
     </div>
     """
@@ -1834,7 +1888,7 @@ defmodule KubevirtToolsWeb.DashboardLive do
 
   defp node_row_matches_filters?(row, filters) do
     matches_search?(filters["search"], row.name) and
-      matches_field?(filters["ready"], if(row.is_ready, do: "Yes", else: "No")) and
+      matches_field?(filters["status"], row.status) and
       matches_field?(filters["role"], row.role) and
       matches_field?(filters["os"], row.os_image)
   end
