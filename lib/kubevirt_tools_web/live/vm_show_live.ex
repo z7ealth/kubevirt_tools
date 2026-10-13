@@ -153,98 +153,92 @@ defmodule KubevirtToolsWeb.VmShowLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={%{}}>
       <div class="space-y-6 max-w-full min-w-0">
-        <.link navigate={~p"/dashboard?tab=vms"} class="text-sm text-pp-primary hover:underline">
-          &larr; Back to VMs
-        </.link>
+        <.pp_breadcrumbs id="vm-breadcrumbs">
+          <:item navigate={~p"/dashboard"}>Dashboard</:item>
+          <:item navigate={~p"/dashboard?tab=vms"}>VMs</:item>
+          <:item>{@namespace}/{@name}</:item>
+        </.pp_breadcrumbs>
 
         <.async_result :let={data} assign={@vm_detail}>
           <:loading>
-            <.pp_paper
-              elevation={0}
-              class="flex items-center gap-3 border border-pp-outline/20 bg-pp-surface-variant/40 px-5 py-12 text-pp-on-surface/70"
-            >
-              <.icon name="hero-arrow-path" class="size-6 motion-safe:animate-spin" />
-              <span>Loading VM…</span>
-            </.pp_paper>
+            <.loading_card label="Loading VM…" />
           </:loading>
           <:failed :let={_failure}>
-            <.pp_alert severity="error">
+            <.banner kind={:error}>
               Could not load this VM. Try refreshing or signing in again.
-            </.pp_alert>
+            </.banner>
           </:failed>
 
-          <.pp_alert :if={!data.found?} severity="warning">
+          <.banner :if={!data.found?} kind={:warning}>
             VirtualMachine <span class="font-mono">{@namespace}/{@name}</span>
             was not found — it may have been deleted.
-          </.pp_alert>
+          </.banner>
 
           <div :if={data.found?} class="space-y-6">
             <% {cores, sockets, guest_cpu_total} =
               virtual_machine_cpu_topology_cells(data.vm, data.vmi) %>
             <% cpu_pct = vm_cpu_usage_pct(data.vm, data.vmi, data.usage) %>
             <% mem_pct = vm_mem_usage_pct(data.vm, data.vmi, data.usage) %>
-            <div>
-              <h1 class="text-2xl font-semibold tracking-tight flex items-center gap-3">
-                <.icon name="hero-computer-desktop" class="size-6 text-pp-primary" />
-                {vm_meta(data.vm, :name)}
-                <span class={vm_phase_badge_classes(data.vm)}>{vm_phase(data.vm)}</span>
-                <.pp_chip :if={vmi_agent_connected?(data.vmi)} size="small" color="info">
-                  <:icon><.icon name="hero-command-line" class="size-3" /></:icon>
+            <.page_title icon="hero-computer-desktop">
+              {vm_meta(data.vm, :name)}
+              <:chips>
+                <.status_chip tone={vm_phase_tone(data.vm)}>{vm_phase(data.vm)}</.status_chip>
+                <.status_chip
+                  :if={vmi_agent_connected?(data.vmi)}
+                  tone={:ok}
+                  icon="hero-command-line-mini"
+                >
                   Guest agent
-                </.pp_chip>
-              </h1>
-              <p class="text-sm text-base-content/60 mt-1 font-mono">
-                {vm_meta(data.vm, :namespace)}
-              </p>
-            </div>
+                </.status_chip>
+              </:chips>
+              <:subtitle><span class="font-mono">{vm_meta(data.vm, :namespace)}</span></:subtitle>
+            </.page_title>
 
-            <.pp_paper class="p-4">
-              <.list>
-                <:item title="Boot mode">{vm_boot_mode(data.vm)}</:item>
-                <:item title="OS">{vmi_os_display(data.vmi)}</:item>
-                <:item title="Cores">{cores}</:item>
-                <:item title="Sockets">{sockets}</:item>
-                <:item title="CPUs (guest)">{guest_cpu_total}</:item>
-                <:item title="Memory">{memory_for_vm_row(data.vm, data.vmi)}</:item>
-                <:item title="CPU usage">
-                  {vm_cpu_usage_display(data.vm, data.vmi, data.usage)}
-                  <span :if={cpu_pct} class={["ml-1", usage_pct_color_class(cpu_pct)]}>
-                    {cpu_pct}%
-                  </span>
-                  <span
-                    :if={vm_usage_unavailable?(data.usage)}
-                    class="text-base-content/45"
-                    title="Usage unavailable — no metrics-server data for this VM's pod yet"
-                  >
-                    (no metrics)
-                  </span>
-                </:item>
-                <:item title="Memory usage">
-                  {vm_mem_usage_display(data.vm, data.vmi, data.usage)}
-                  <span :if={mem_pct} class={["ml-1", usage_pct_color_class(mem_pct)]}>
-                    {mem_pct}%
-                  </span>
-                  <span
-                    :if={vm_usage_unavailable?(data.usage)}
-                    class="text-base-content/45"
-                    title="Usage unavailable — no metrics-server data for this VM's pod yet"
-                  >
-                    (no metrics)
-                  </span>
-                </:item>
-                <:item title="VMI phase">
-                  {if(data.vmi, do: vmi_phase(data.vmi), else: "—")}
-                </:item>
-                <:item title="Ready">
-                  {if(data.vmi, do: vmi_ready_label(data.vmi), else: "—")}
-                </:item>
-                <:item title="Node">
-                  {if(data.vmi, do: vmi_scheduling_node_name(data.vmi), else: "—")}
-                </:item>
-                <:item title="IP">{if(data.vmi, do: vmi_primary_ip(data.vmi), else: "—")}</:item>
-                <:item title="Created">{vm_meta(data.vm, :created)}</:item>
-              </.list>
-            </.pp_paper>
+            <.list id="vm-details">
+              <:item title="Boot mode">{vm_boot_mode(data.vm)}</:item>
+              <:item title="OS">{vmi_os_display(data.vmi)}</:item>
+              <:item title="Cores">{cores}</:item>
+              <:item title="Sockets">{sockets}</:item>
+              <:item title="CPUs (guest)">{guest_cpu_total}</:item>
+              <:item title="Memory">{memory_for_vm_row(data.vm, data.vmi)}</:item>
+              <:item title="CPU usage">
+                {vm_cpu_usage_display(data.vm, data.vmi, data.usage)}
+                <span :if={cpu_pct} class={["ml-1", tone_text_class(usage_pct_tone(cpu_pct))]}>
+                  {cpu_pct}%
+                </span>
+                <span
+                  :if={vm_usage_unavailable?(data.usage)}
+                  class="text-pp-on-surface-variant"
+                  title="Usage unavailable — no metrics-server data for this VM's pod yet"
+                >
+                  (no metrics)
+                </span>
+              </:item>
+              <:item title="Memory usage">
+                {vm_mem_usage_display(data.vm, data.vmi, data.usage)}
+                <span :if={mem_pct} class={["ml-1", tone_text_class(usage_pct_tone(mem_pct))]}>
+                  {mem_pct}%
+                </span>
+                <span
+                  :if={vm_usage_unavailable?(data.usage)}
+                  class="text-pp-on-surface-variant"
+                  title="Usage unavailable — no metrics-server data for this VM's pod yet"
+                >
+                  (no metrics)
+                </span>
+              </:item>
+              <:item title="VMI phase">
+                {if(data.vmi, do: vmi_phase(data.vmi), else: "—")}
+              </:item>
+              <:item title="Ready">
+                {if(data.vmi, do: vmi_ready_label(data.vmi), else: "—")}
+              </:item>
+              <:item title="Node">
+                {if(data.vmi, do: vmi_scheduling_node_name(data.vmi), else: "—")}
+              </:item>
+              <:item title="IP">{if(data.vmi, do: vmi_primary_ip(data.vmi), else: "—")}</:item>
+              <:item title="Created">{vm_meta(data.vm, :created)}</:item>
+            </.list>
 
             <% overlay_message =
               "Requires Prometheus scraping cAdvisor container metrics — set PROMETHEUS_URL (see README)"
@@ -279,7 +273,7 @@ defmodule KubevirtToolsWeb.VmShowLive do
                 opts={
                   DashboardCharts.usage_area_chart(mem_points,
                     name: "Memory %",
-                    color: "var(--color-info)"
+                    color: "var(--color-pp-tertiary)"
                   )
                 }
                 dependency_overlay={overlay}
@@ -287,11 +281,9 @@ defmodule KubevirtToolsWeb.VmShowLive do
             </div>
 
             <div class="space-y-3">
-              <h2 class="text-lg font-medium flex items-center gap-2">
-                <.icon name="hero-wifi" class="size-5 text-pp-primary" /> Network interfaces
-              </h2>
+              <.section_title icon="hero-wifi">Network interfaces</.section_title>
               <.pp_table_container>
-                <.pp_table dense>
+                <.pp_table>
                   <.pp_table_head>
                     <.pp_table_row>
                       <.pp_table_cell variant="head">Interface</.pp_table_cell>
@@ -305,24 +297,34 @@ defmodule KubevirtToolsWeb.VmShowLive do
                   </.pp_table_head>
                   <.pp_table_body>
                     <.pp_table_row :if={data.network_rows == []}>
-                      <.pp_table_cell colspan="7" align="center" class="text-pp-on-surface/50 py-6">
+                      <.pp_table_cell
+                        colspan="7"
+                        align="center"
+                        class="py-8 text-pp-on-surface-variant"
+                      >
                         No network interfaces defined.
                       </.pp_table_cell>
                     </.pp_table_row>
-                    <.pp_table_row :for={row <- data.network_rows}>
-                      <.pp_table_cell class="text-xs font-mono">{row.iface_name}</.pp_table_cell>
-                      <.pp_table_cell class="text-xs">{row.model}</.pp_table_cell>
-                      <.pp_table_cell class="text-xs whitespace-nowrap">{row.binding}</.pp_table_cell>
-                      <.pp_table_cell class="font-mono text-xs text-pp-on-surface/70">
+                    <.pp_table_row
+                      :for={row <- data.network_rows}
+                      class="cursor-pointer"
+                      phx-click={
+                        JS.navigate(~p"/networks/#{row.namespace}/#{row.vm_name}/#{row.iface_name}")
+                      }
+                    >
+                      <.pp_table_cell class="font-mono">{row.iface_name}</.pp_table_cell>
+                      <.pp_table_cell>{row.model}</.pp_table_cell>
+                      <.pp_table_cell class="whitespace-nowrap">{row.binding}</.pp_table_cell>
+                      <.pp_table_cell class="font-mono text-pp-on-surface-variant">
                         {row.mac_spec}
                       </.pp_table_cell>
-                      <.pp_table_cell class="font-mono text-xs text-pp-on-surface/70">
+                      <.pp_table_cell class="font-mono text-pp-on-surface-variant">
                         {row.mac_live}
                       </.pp_table_cell>
-                      <.pp_table_cell class="font-mono text-xs text-pp-on-surface/80">
+                      <.pp_table_cell class="font-mono text-pp-on-surface-variant">
                         {row.ips}
                       </.pp_table_cell>
-                      <.pp_table_cell class="font-mono text-xs text-pp-on-surface/70">
+                      <.pp_table_cell class="font-mono text-pp-on-surface-variant">
                         {row.guest_iface}
                       </.pp_table_cell>
                     </.pp_table_row>
@@ -332,11 +334,9 @@ defmodule KubevirtToolsWeb.VmShowLive do
             </div>
 
             <div class="space-y-3">
-              <h2 class="text-lg font-medium flex items-center gap-2">
-                <.icon name="hero-circle-stack" class="size-5 text-pp-primary" /> Disks &amp; volumes
-              </h2>
+              <.section_title icon="hero-circle-stack">Disks &amp; volumes</.section_title>
               <.pp_table_container>
-                <.pp_table dense>
+                <.pp_table>
                   <.pp_table_head>
                     <.pp_table_row>
                       <.pp_table_cell variant="head">Disk</.pp_table_cell>
@@ -352,26 +352,36 @@ defmodule KubevirtToolsWeb.VmShowLive do
                   </.pp_table_head>
                   <.pp_table_body>
                     <.pp_table_row :if={data.disk_rows == []}>
-                      <.pp_table_cell colspan="9" align="center" class="text-pp-on-surface/50 py-6">
+                      <.pp_table_cell
+                        colspan="9"
+                        align="center"
+                        class="py-8 text-pp-on-surface-variant"
+                      >
                         No disks defined.
                       </.pp_table_cell>
                     </.pp_table_row>
-                    <.pp_table_row :for={row <- data.disk_rows}>
-                      <.pp_table_cell class="text-xs font-mono">{row.disk_name}</.pp_table_cell>
-                      <.pp_table_cell class="text-xs">{row.device_kind}</.pp_table_cell>
-                      <.pp_table_cell class="text-xs font-mono">{row.bus}</.pp_table_cell>
-                      <.pp_table_cell class="text-xs tabular-nums">{row.boot_order}</.pp_table_cell>
-                      <.pp_table_cell class="text-xs whitespace-nowrap">
+                    <.pp_table_row
+                      :for={row <- data.disk_rows}
+                      class="cursor-pointer"
+                      phx-click={
+                        JS.navigate(~p"/disks/#{row.namespace}/#{row.vm_name}/#{row.disk_name}")
+                      }
+                    >
+                      <.pp_table_cell class="font-mono">{row.disk_name}</.pp_table_cell>
+                      <.pp_table_cell>{row.device_kind}</.pp_table_cell>
+                      <.pp_table_cell class="font-mono">{row.bus}</.pp_table_cell>
+                      <.pp_table_cell class="tabular-nums">{row.boot_order}</.pp_table_cell>
+                      <.pp_table_cell class="whitespace-nowrap">
                         {row.volume_kind}
                       </.pp_table_cell>
-                      <.pp_table_cell class="text-xs font-mono text-pp-on-surface/75">
+                      <.pp_table_cell class="font-mono text-pp-on-surface-variant">
                         {row.source}
                       </.pp_table_cell>
-                      <.pp_table_cell class="text-xs tabular-nums whitespace-nowrap">
+                      <.pp_table_cell class="tabular-nums whitespace-nowrap">
                         {row.size}
                       </.pp_table_cell>
-                      <.pp_table_cell class="text-xs">{row.storage_class}</.pp_table_cell>
-                      <.pp_table_cell class="text-xs">{row.pvc_phase}</.pp_table_cell>
+                      <.pp_table_cell>{row.storage_class}</.pp_table_cell>
+                      <.pp_table_cell>{row.pvc_phase}</.pp_table_cell>
                     </.pp_table_row>
                   </.pp_table_body>
                 </.pp_table>

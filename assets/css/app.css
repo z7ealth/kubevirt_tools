@@ -10,13 +10,14 @@
 @source "../js";
 @source "../../lib/kubevirt_tools_web";
 
-/* PhoenixPaper — Material Design component library. Its theme tokens are all
-   namespaced `pp-*` so they never collide with daisyUI's own. The @source line
-   is required so Tailwind scans the library's .ex files for the classes they
-   emit. See assets/css: the `--color-pp-*` overrides further down point these
-   at the daisyUI (kubevirt teal) palette so PhoenixPaper tracks the app theme. */
+/* PhoenixPaper — Material Design 3 component library. Its tokens are all
+   namespaced `pp-*`, so they never collide with daisyUI's. The stylesheet
+   declares its own @source for the library's .ex files.
+   phoenix_paper_theme.css is the full MD3 scheme (every color role, light +
+   dark) generated from the kubevirt.io teal:
+     mix phoenix_paper.gen.theme --seed "#00797f" --force */
 @import "../../deps/phoenix_paper/priv/static/phoenix_paper.css";
-@source "../../deps/phoenix_paper/lib";
+@import "./phoenix_paper_theme.css";
 
 /* A Tailwind plugin that makes "hero-#{ICON}" classes available.
    The heroicons installation itself is managed by your mix.exs */
@@ -110,26 +111,41 @@
   --font-sans: "Bitter", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 }
 
-/* Point PhoenixPaper's `pp-*` tokens at the daisyUI theme variables so every
-   pp_* component (buttons, app bar, cards, tables, chips, inputs…) renders in
-   the kubevirt teal palette and flips with the existing light/dark toggle —
-   no second theme to maintain. daisyUI's blocks above set `--color-primary`
-   etc. per `[data-theme]`, and these resolve against whichever is active.
-   PhoenixPaper's own `--color-pp-success/-warning/-info` (Alert severities)
-   are left as the library ships them. */
+/* MD3 has no warning role (PhoenixPaper 0.5 dropped success/warning/info),
+   so "warning" is an app-level MD3 custom color: the primary tonal roles of a
+   scheme seeded from kubevirt.io's nav accent (#fed476), via
+   `mix phoenix_paper.gen.theme --seed "#fed476" --stdout`. Used by
+   <.banner kind={:warning}> and warning status chips. */
+@theme {
+  --font-pp-brand: "Bitter", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-pp-plain: "Bitter", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --color-app-warning: var(--app-warning);
+  --color-app-on-warning: var(--app-on-warning);
+  --color-app-warning-container: var(--app-warning-container);
+  --color-app-on-warning-container: var(--app-on-warning-container);
+}
+
 :root {
-  --color-pp-primary: var(--color-primary);
-  --color-pp-on-primary: var(--color-primary-content);
-  --color-pp-secondary: var(--color-secondary);
-  --color-pp-on-secondary: var(--color-secondary-content);
-  --color-pp-tertiary: var(--color-accent);
-  --color-pp-on-tertiary: var(--color-accent-content);
-  --color-pp-error: var(--color-error);
-  --color-pp-on-error: var(--color-error-content);
-  --color-pp-surface: var(--color-base-100);
-  --color-pp-on-surface: var(--color-base-content);
-  --color-pp-surface-variant: var(--color-base-200);
-  --color-pp-outline: color-mix(in oklch, var(--color-base-content) 30%, transparent);
+  --app-warning: #775a0b;
+  --app-on-warning: #ffffff;
+  --app-warning-container: #ffdf9c;
+  --app-on-warning-container: #5b4300;
+}
+
+[data-theme="dark"] {
+  --app-warning: #e8c26c;
+  --app-on-warning: #3f2e00;
+  --app-warning-container: #5b4300;
+  --app-on-warning-container: #ffdf9c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --app-warning: #e8c26c;
+    --app-on-warning: #3f2e00;
+    --app-warning-container: #5b4300;
+    --app-on-warning-container: #ffdf9c;
+  }
 }
 
 /* Stopped / chart “soft red” — uses theme `--color-stopped` from daisy blocks above */
@@ -175,27 +191,6 @@
 
 .apexcharts-tooltip-series-group {
   background: transparent !important;
-}
-
-/* Flash toast: primary-colored progress bar (matches app surface on the card) */
-@keyframes flash-progress-bar {
-  from {
-    transform: scaleX(1);
-  }
-  to {
-    transform: scaleX(0);
-  }
-}
-
-.flash-progress-bar-fill {
-  transform-origin: left center;
-  animation: flash-progress-bar 6s linear forwards;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .flash-progress-bar-fill {
-    animation: none;
-  }
 }
 
 /* Topology (vis-network): Node + VM colors track active Daisy theme via custom properties */
@@ -331,24 +326,24 @@
 }
 
 .welcome-screen {
-  background: color-mix(in oklch, var(--color-base-100) 92%, var(--color-base-200));
+  background: color-mix(in oklch, var(--color-pp-surface) 92%, var(--color-pp-surface-container));
 }
 
 .welcome-screen__aurora {
   background:
     radial-gradient(
       ellipse 85% 55% at 50% -15%,
-      color-mix(in oklch, var(--color-primary) 38%, transparent),
+      color-mix(in oklch, var(--color-pp-primary) 38%, transparent),
       transparent 58%
     ),
     radial-gradient(
       ellipse 50% 45% at 105% 45%,
-      color-mix(in oklch, var(--color-accent) 28%, transparent),
+      color-mix(in oklch, var(--color-pp-tertiary) 28%, transparent),
       transparent 52%
     ),
     radial-gradient(
       ellipse 50% 50% at -5% 85%,
-      color-mix(in oklch, var(--color-primary) 22%, transparent),
+      color-mix(in oklch, var(--color-pp-primary) 22%, transparent),
       transparent 48%
     );
   animation: welcome-aurora-shift 16s ease-in-out infinite;
@@ -357,12 +352,12 @@
 .welcome-screen__grid {
   background-image:
     linear-gradient(
-      color-mix(in oklch, var(--color-base-content) 14%, transparent) 1px,
+      color-mix(in oklch, var(--color-pp-on-surface) 14%, transparent) 1px,
       transparent 1px
     ),
     linear-gradient(
       90deg,
-      color-mix(in oklch, var(--color-base-content) 14%, transparent) 1px,
+      color-mix(in oklch, var(--color-pp-on-surface) 14%, transparent) 1px,
       transparent 1px
     );
   background-size: 48px 48px;

@@ -7,7 +7,7 @@ defmodule KubevirtToolsWeb.ChartComponents do
   """
   use Phoenix.Component
 
-  import KubevirtToolsWeb.CoreComponents, only: [icon: 1]
+  import KubevirtToolsWeb.CoreComponents, only: [banner: 1]
 
   @doc """
   Renders a chart. **Required:** unique `id` (include a version suffix when data refreshes).
@@ -15,7 +15,7 @@ defmodule KubevirtToolsWeb.ChartComponents do
   - `opts` — ApexCharts options map (serializable with Jason).
   - `title` — optional card title above the chart.
   - `height` — fixed CSS height for the plot area so cards stay compact (default ~200px).
-  - `dependency_overlay` — when set, dims the plot and shows a daisyUI-style alert explaining
+  - `dependency_overlay` — when set, dims the plot and shows a warning banner explaining
     what must be installed or configured (e.g. Prometheus).
   """
   attr :id, :string, required: true
@@ -32,13 +32,13 @@ defmodule KubevirtToolsWeb.ChartComponents do
 
     ~H"""
     <section class={[
-      "rounded-lg border border-base-300/70 bg-base-100/40 shadow-sm",
-      "p-3 min-w-0 w-full overflow-hidden flex flex-col gap-1.5",
+      "rounded-pp-md border border-pp-outline-variant bg-pp-surface",
+      "p-4 min-w-0 w-full overflow-hidden flex flex-col gap-2",
       @class
     ]}>
       <h3
         :if={@title}
-        class="text-xs font-semibold uppercase tracking-wide text-base-content/65 shrink-0 leading-tight"
+        class="pp-title-small text-pp-on-surface-variant shrink-0"
       >
         {@title}
       </h3>
@@ -46,25 +46,18 @@ defmodule KubevirtToolsWeb.ChartComponents do
         <div
           :if={@dependency_overlay}
           class={[
-            "absolute inset-0 z-20 flex items-center justify-center p-2 rounded-md",
-            "bg-base-300/55 backdrop-blur-[3px]"
+            "absolute inset-0 z-20 flex items-center justify-center p-2 rounded-pp-sm",
+            "bg-pp-surface-container/70 backdrop-blur-[3px]"
           ]}
         >
-          <div
-            role="alert"
-            class={[
-              "alert alert-warning shadow-lg max-h-full overflow-y-auto",
-              "py-2 px-3 gap-2 text-xs leading-snug max-w-[min(100%,20rem)]"
-            ]}
+          <.banner
+            kind={:warning}
+            icon="hero-puzzle-piece"
+            title="Setup required"
+            class="max-h-full max-w-[min(100%,22rem)] overflow-y-auto pp-elevation-2"
           >
-            <.icon name="hero-puzzle-piece" class="size-5 shrink-0 opacity-90" />
-            <div>
-              <p class="font-semibold text-[0.7rem] uppercase tracking-wide text-warning-content/90">
-                Setup required
-              </p>
-              <p class="mt-0.5 text-warning-content/95">{@dependency_overlay}</p>
-            </div>
-          </div>
+            {@dependency_overlay}
+          </.banner>
         </div>
         <div
           id={@id}

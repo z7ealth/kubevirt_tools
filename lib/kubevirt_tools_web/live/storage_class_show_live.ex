@@ -52,66 +52,56 @@ defmodule KubevirtToolsWeb.StorageClassShowLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={%{}}>
       <div class="space-y-6 max-w-full min-w-0">
-        <.link
-          navigate={~p"/dashboard?tab=storage_classes"}
-          class="text-sm text-pp-primary hover:underline"
-        >
-          &larr; Back to Storage classes
-        </.link>
+        <.pp_breadcrumbs id="storage-class-breadcrumbs">
+          <:item navigate={~p"/dashboard"}>Dashboard</:item>
+          <:item navigate={~p"/dashboard?tab=storage_classes"}>Storage classes</:item>
+          <:item>{@name}</:item>
+        </.pp_breadcrumbs>
 
         <.async_result :let={data} assign={@sc_detail}>
           <:loading>
-            <.pp_paper
-              elevation={0}
-              class="flex items-center gap-3 border border-pp-outline/20 bg-pp-surface-variant/40 px-5 py-12 text-pp-on-surface/70"
-            >
-              <.icon name="hero-arrow-path" class="size-6 motion-safe:animate-spin" />
-              <span>Loading storage class…</span>
-            </.pp_paper>
+            <.loading_card label="Loading storage class…" />
           </:loading>
           <:failed :let={_failure}>
-            <.pp_alert severity="error">
+            <.banner kind={:error}>
               Could not load this storage class. Try refreshing or signing in again.
-            </.pp_alert>
+            </.banner>
           </:failed>
 
-          <.pp_alert :if={!data.found?} severity="warning">
+          <.banner :if={!data.found?} kind={:warning}>
             StorageClass <span class="font-mono">{@name}</span>
             was not found — it may have been deleted.
-          </.pp_alert>
+          </.banner>
 
           <div :if={data.found?} class="space-y-6">
-            <div>
-              <h1 class="text-2xl font-semibold tracking-tight flex items-center gap-3">
-                <.icon name="hero-archive-box" class="size-6 text-pp-primary" /> {data.row.name}
-                <.pp_chip :if={data.row.default?} size="small" color="primary">default</.pp_chip>
-              </h1>
-            </div>
+            <.page_title icon="hero-archive-box">
+              {data.row.name}
+              <:chips>
+                <.status_chip :if={data.row.default?} icon="hero-star-mini" selected>
+                  default
+                </.status_chip>
+              </:chips>
+            </.page_title>
 
-            <.pp_paper class="p-4">
-              <.list>
-                <:item title="Provisioner">{data.row.provisioner}</:item>
-                <:item title="Reclaim policy">{data.row.reclaim}</:item>
-                <:item title="Volume binding">{data.row.binding}</:item>
-                <:item title="Allows expansion">
-                  {cond do
-                    data.row.expand == true -> "Yes"
-                    data.row.expand == false -> "No"
-                    true -> "—"
-                  end}
-                </:item>
-                <:item title="PVCs using this class">{data.row.pvc_count}</:item>
-                <:item title="Parameters">{data.row.parameters_full}</:item>
-              </.list>
-            </.pp_paper>
+            <.list id="storage-class-details">
+              <:item title="Provisioner">{data.row.provisioner}</:item>
+              <:item title="Reclaim policy">{data.row.reclaim}</:item>
+              <:item title="Volume binding">{data.row.binding}</:item>
+              <:item title="Allows expansion">
+                {cond do
+                  data.row.expand == true -> "Yes"
+                  data.row.expand == false -> "No"
+                  true -> "—"
+                end}
+              </:item>
+              <:item title="PVCs using this class">{data.row.pvc_count}</:item>
+              <:item title="Parameters">{data.row.parameters_full}</:item>
+            </.list>
 
             <div class="space-y-3">
-              <h2 class="text-lg font-medium flex items-center gap-2">
-                <.icon name="hero-circle-stack" class="size-5 text-pp-primary" />
-                PVCs using this class
-              </h2>
+              <.section_title icon="hero-circle-stack">PVCs using this class</.section_title>
               <.pp_table_container>
-                <.pp_table dense>
+                <.pp_table>
                   <.pp_table_head>
                     <.pp_table_row>
                       <.pp_table_cell variant="head">Namespace</.pp_table_cell>
@@ -122,21 +112,26 @@ defmodule KubevirtToolsWeb.StorageClassShowLive do
                   </.pp_table_head>
                   <.pp_table_body>
                     <.pp_table_row :if={data.pvcs == []}>
-                      <.pp_table_cell colspan="4" align="center" class="text-pp-on-surface/50 py-6">
+                      <.pp_table_cell
+                        colspan="4"
+                        align="center"
+                        class="py-8 text-pp-on-surface-variant"
+                      >
                         No PVCs use this storage class.
                       </.pp_table_cell>
                     </.pp_table_row>
                     <.pp_table_row :for={pvc <- data.pvcs}>
-                      <.pp_table_cell class="font-mono text-xs">
+                      <.pp_table_cell class="font-mono text-pp-on-surface-variant">
                         {vm_meta(pvc, :namespace)}
                       </.pp_table_cell>
-                      <.pp_table_cell class="font-mono text-xs font-medium">
+                      <.pp_table_cell class="font-mono font-medium">
                         {vm_meta(pvc, :name)}
                       </.pp_table_cell>
-                      <.pp_table_cell class="text-xs">
-                        {get_in(pvc, ["status", "phase"]) || "—"}
+                      <.pp_table_cell>
+                        <% pvc_phase = get_in(pvc, ["status", "phase"]) || "—" %>
+                        <.status_chip tone={pvc_phase_tone(pvc_phase)}>{pvc_phase}</.status_chip>
                       </.pp_table_cell>
-                      <.pp_table_cell class="text-xs font-mono">
+                      <.pp_table_cell class="font-mono tabular-nums">
                         {get_in(pvc, ["status", "capacity", "storage"]) || "—"}
                       </.pp_table_cell>
                     </.pp_table_row>

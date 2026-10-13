@@ -254,7 +254,7 @@ defmodule KubevirtTools.VmExport.Workbook do
           ns,
           VmExport.printable_status(vm),
           mem,
-          to_string(vmi_memory_bytes(vmi) || mem_bytes_from_quantity(mem)),
+          to_string(vmi_memory_bytes(vmi)),
           domain_resource_field(vm, "requests", "memory"),
           domain_resource_field(vm, "limits", "memory"),
           hugepages_summary(vm),
@@ -521,7 +521,7 @@ defmodule KubevirtTools.VmExport.Workbook do
         threads = Map.get(dom, "threads")
         total = domain_guest_cpu_total(dom, vmi)
         node = (vmi && get_in(vmi, ["status", "nodeName"])) || ""
-        nn = node && Map.get(nmap, node)
+        nn = Map.get(nmap, node)
 
         [
           name,

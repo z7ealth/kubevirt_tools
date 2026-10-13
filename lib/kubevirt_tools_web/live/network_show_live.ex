@@ -58,41 +58,37 @@ defmodule KubevirtToolsWeb.NetworkShowLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={%{}}>
       <div class="space-y-6 max-w-full min-w-0">
-        <.link
-          navigate={~p"/dashboard?tab=networks"}
-          class="text-sm text-pp-primary hover:underline"
-        >
-          &larr; Back to Networks
-        </.link>
+        <.pp_breadcrumbs id="network-breadcrumbs">
+          <:item navigate={~p"/dashboard"}>Dashboard</:item>
+          <:item navigate={~p"/dashboard?tab=networks"}>Networks</:item>
+          <:item>{@iface_name}</:item>
+        </.pp_breadcrumbs>
 
         <.async_result :let={data} assign={@row_detail}>
           <:loading>
-            <.pp_paper
-              elevation={0}
-              class="flex items-center gap-3 border border-pp-outline/20 bg-pp-surface-variant/40 px-5 py-12 text-pp-on-surface/70"
-            >
-              <.icon name="hero-arrow-path" class="size-6 motion-safe:animate-spin" />
-              <span>Loading interface…</span>
-            </.pp_paper>
+            <.loading_card label="Loading interface…" />
           </:loading>
           <:failed :let={_failure}>
-            <.pp_alert severity="error">
+            <.banner kind={:error}>
               Could not load this interface. Try refreshing or signing in again.
-            </.pp_alert>
+            </.banner>
           </:failed>
 
-          <.pp_alert :if={!data.found?} severity="warning">
+          <.banner :if={!data.found?} kind={:warning}>
             Interface <span class="font-mono">{@iface_name}</span>
             on <span class="font-mono">{@namespace}/{@vm_name}</span>
             was not found — the VM or its interface may have changed.
-          </.pp_alert>
+          </.banner>
 
           <div :if={data.found?} class="space-y-6">
-            <div>
-              <h1 class="text-2xl font-semibold tracking-tight flex items-center gap-3">
-                <.icon name="hero-wifi" class="size-6 text-pp-primary" /> {data.row.iface_name}
-              </h1>
-              <p class="text-sm text-base-content/60 mt-1">
+            <.page_title icon="hero-wifi">
+              {data.row.iface_name}
+              <:chips>
+                <.status_chip tone={phase_tone(data.row.vmi_phase)}>
+                  {data.row.vmi_phase}
+                </.status_chip>
+              </:chips>
+              <:subtitle>
                 on
                 <.link
                   navigate={~p"/vms/#{@namespace}/#{@vm_name}"}
@@ -100,20 +96,18 @@ defmodule KubevirtToolsWeb.NetworkShowLive do
                 >
                   {@namespace}/{@vm_name}
                 </.link>
-              </p>
-            </div>
+              </:subtitle>
+            </.page_title>
 
-            <.pp_paper class="p-4">
-              <.list>
-                <:item title="Model">{data.row.model}</:item>
-                <:item title="Binding">{data.row.binding}</:item>
-                <:item title="MAC (spec)">{data.row.mac_spec}</:item>
-                <:item title="MAC (VMI)">{data.row.mac_live}</:item>
-                <:item title="IP addresses">{data.row.ips}</:item>
-                <:item title="Guest interface">{data.row.guest_iface}</:item>
-                <:item title="VMI phase">{data.row.vmi_phase}</:item>
-              </.list>
-            </.pp_paper>
+            <.list id="network-details">
+              <:item title="Model">{data.row.model}</:item>
+              <:item title="Binding">{data.row.binding}</:item>
+              <:item title="MAC (spec)">{data.row.mac_spec}</:item>
+              <:item title="MAC (VMI)">{data.row.mac_live}</:item>
+              <:item title="IP addresses">{data.row.ips}</:item>
+              <:item title="Guest interface">{data.row.guest_iface}</:item>
+              <:item title="VMI phase">{data.row.vmi_phase}</:item>
+            </.list>
           </div>
         </.async_result>
       </div>

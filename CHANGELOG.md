@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.0
+
+- **Material Design 3 UI**: migrated to [PhoenixPaper](https://hex.pm/packages/phoenix_paper) 0.5.2. Every page now uses MD3 components, type scale and color roles, with a full light/dark scheme generated from the kubevirt.io teal (`assets/css/phoenix_paper_theme.css`).
+- **Breadcrumbs** on every detail page (e.g. Dashboard › VMs › prod/api-gateway) replace the "← Back to …" links.
+- **Status chips** for VM/VMI phases, PVC phases, node readiness and the default storage class, with an icon per status (running, stopped, transitional, error, pending).
+- **New filter bar**: an MD3 search field plus a dropdown menu per column that shows the active value; sortable headers use MD3 sort arrows.
+- **Notifications**: flash messages are MD3 snackbars (auto-hide after 6s), with "connection lost" notices while the LiveView socket is down. Error and warning messages are inline banners.
+- **Clickable rows** on the VM and node detail pages: VMIs, network interfaces and disks open their own detail pages.
+- **Dashboard**: export buttons are a connected XLSX/CSV button group; heading hints show rich tooltips; the Prometheus placeholders no longer clip their message.
+- **Mobile**: compact top app bar (logo, icon actions) on small screens.
+- **Fixes**: the export buttons no longer nest a `<button>` inside a link (invalid HTML); status colors no longer depend on classes Tailwind didn't scan.
+
 ## v0.2.2
 
 - **Sortable columns** on all 5 dashboard tables (VMs, Networks, Disks, Storage classes, Nodes) — click a header to sort ascending/descending/cleared; combines with the existing per-column filters.

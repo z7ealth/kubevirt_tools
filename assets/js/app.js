@@ -24,21 +24,22 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/kubevirt_tools"
 import {VmTopologyHook} from "./hooks/vm_topology.js"
+import PhoenixPaperHooks from "phoenix_paper"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, VmTopology: VmTopologyHook},
+  hooks: {...colocatedHooks, ...PhoenixPaperHooks, VmTopology: VmTopologyHook},
 })
 
-// Show progress bar on live navigation and form submits (match DaisyUI --color-primary)
+// Show progress bar on live navigation and form submits (MD3 primary role)
 function syncTopbarFromTheme() {
   let primary = getComputedStyle(document.documentElement)
-    .getPropertyValue("--color-primary")
+    .getPropertyValue("--color-pp-primary")
     .trim()
-  if (!primary) primary = "oklch(52% 0.089 201)"
+  if (!primary) primary = "#00696e"
   topbar.config({
     barColors: {0: primary, 1: primary},
     shadowColor: "rgba(0, 0, 0, 0.25)",

@@ -45,65 +45,84 @@ defmodule KubevirtToolsWeb.Layouts do
   def app(assigns) do
     ~H"""
     <div class="flex min-h-dvh flex-col">
-      <.pp_app_bar
+      <.pp_top_app_bar
+        id="app-top-bar"
         position="sticky"
-        color="surface"
-        elevation={2}
-        class={[
-          "shrink-0 border-b border-base-300/60 backdrop-blur-md",
-          "[&>div]:h-16 [&>div]:px-4 sm:[&>div]:px-8 lg:[&>div]:px-14"
-        ]}
+        class="shrink-0 border-b border-pp-outline-variant/60 sm:px-4 lg:px-10"
       >
+        <:leading :if={@navbar == :full}>
+          <.link
+            navigate={~p"/"}
+            class="ms-2 flex shrink-0 items-center"
+            aria-hidden="true"
+            tabindex="-1"
+          >
+            <img
+              src={~p"/images/kubevirt_tools_logo_no_bg.png"}
+              class="h-9 w-auto max-w-[10rem] object-contain object-left"
+              alt=""
+            />
+          </.link>
+        </:leading>
         <.link
           :if={@navbar == :full}
           navigate={~p"/"}
-          class="flex w-fit items-center gap-3 group normal-case"
+          id="navbar-home-link"
+          class="ms-2 hidden flex-col leading-tight transition-colors hover:text-pp-primary sm:flex"
         >
-          <img
-            src={~p"/images/kubevirt_tools_logo_no_bg.png"}
-            class="h-9 w-auto max-w-[10rem] shrink-0 object-contain object-left"
-            alt="KubeVirt Tools"
-          />
-          <span class="flex flex-col leading-tight">
-            <span class="text-sm font-semibold tracking-tight group-hover:text-pp-primary transition-colors">
-              KubeVirt Tools
-            </span>
-            <span :if={@current_scope} class="text-xs text-base-content/55 tabular-nums">
-              v{KubevirtTools.version_string()}
-            </span>
+          <span class="pp-title-medium">KubeVirt Tools</span>
+          <span
+            :if={@current_scope}
+            class="pp-label-small text-pp-on-surface-variant tabular-nums"
+          >
+            v{KubevirtTools.version_string()}
           </span>
         </.link>
-        <span :if={@navbar == :theme_only}>&nbsp;</span>
 
         <:actions>
-          <.link
+          <.pp_icon_button
             :if={@navbar == :full && @current_scope}
+            icon="hero-bug-ant"
+            label="Open GitHub Issues"
             href="https://github.com/z7ealth/kubevirt_tools/issues"
-            class={nav_action_classes()}
             target="_blank"
             rel="noopener noreferrer"
-            title="Open GitHub Issues"
             id="navbar-github-issues-link"
-          >
-            <.icon name="hero-bug-ant" class="size-4 opacity-70" />
-            <span class="hidden sm:inline">Issues</span>
-          </.link>
-          <.link
+          />
+          <.pp_button
             :if={@navbar == :full && @current_scope}
+            variant="text"
             href={~p"/session"}
             method="delete"
-            class={nav_action_classes()}
+            id="navbar-sign-out"
+            class="max-sm:hidden"
           >
-            <.icon name="hero-arrow-right-on-rectangle" class="size-4 opacity-70" /> Sign out
-          </.link>
-          <.link :if={@navbar == :full && !@current_scope} navigate={~p"/login"}>
-            <.pp_button color="primary" class="text-xs">Sign in</.pp_button>
-          </.link>
-          <span class={[@navbar == :full && "pl-2 ml-1 border-l border-base-300/80"]}>
+            <:start_icon>
+              <.icon name="hero-arrow-right-on-rectangle" class="size-[18px]" />
+            </:start_icon>
+            Sign out
+          </.pp_button>
+          <.pp_icon_button
+            :if={@navbar == :full && @current_scope}
+            icon="hero-arrow-right-on-rectangle"
+            label="Sign out"
+            href={~p"/session"}
+            method="delete"
+            id="navbar-sign-out-compact"
+            class="sm:hidden"
+          />
+          <.pp_button
+            :if={@navbar == :full && !@current_scope}
+            navigate={~p"/login"}
+            id="navbar-sign-in"
+          >
+            Sign in
+          </.pp_button>
+          <span class={["me-2", @navbar == :full && "ms-2 border-s border-pp-outline-variant ps-3"]}>
             <.theme_toggle />
           </span>
         </:actions>
-      </.pp_app_bar>
+      </.pp_top_app_bar>
 
       <main class={[
         "flex min-h-0 flex-1 flex-col space-y-4 px-4 py-10 sm:px-8 lg:px-14 overflow-x-hidden",
@@ -112,18 +131,19 @@ defmodule KubevirtToolsWeb.Layouts do
         {render_slot(@inner_block)}
       </main>
 
-      <footer class="shrink-0 border-t border-base-300/60 bg-base-100/85 py-5 text-center">
-        <div class="inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-sm text-base-content/65">
-          <a
-            href="https://github.com/z7ealth/kubevirt_tools"
-            class="inline-flex items-center gap-2 transition-colors hover:text-primary"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="KubeVirt Tools on GitHub"
-            id="footer-github-link"
-          >
+      <footer class="shrink-0 border-t border-pp-outline-variant/60 bg-pp-surface-container-low py-3 text-center">
+        <.pp_button
+          variant="text"
+          color="secondary"
+          href="https://github.com/z7ealth/kubevirt_tools"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="KubeVirt Tools on GitHub"
+          id="footer-github-link"
+        >
+          <:start_icon>
             <svg
-              class="size-5 shrink-0 opacity-80"
+              class="size-[18px] shrink-0"
               viewBox="0 0 24 24"
               fill="currentColor"
               aria-hidden="true"
@@ -135,9 +155,9 @@ defmodule KubevirtToolsWeb.Layouts do
                 d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
               />
             </svg>
-            <span class="font-medium">GitHub</span>
-          </a>
-        </div>
+          </:start_icon>
+          GitHub
+        </.pp_button>
       </footer>
     </div>
 
@@ -146,7 +166,9 @@ defmodule KubevirtToolsWeb.Layouts do
   end
 
   @doc """
-  Shows the flash group with standard titles and content.
+  Shows the flash group: Phoenix's `@flash` as MD3 snackbars (auto-hidden
+  after 6s), plus the "connection lost" notices while the LiveView socket is
+  disconnected.
 
   ## Examples
 
@@ -157,55 +179,20 @@ defmodule KubevirtToolsWeb.Layouts do
 
   def flash_group(assigns) do
     ~H"""
-    <div id={@id} aria-live="polite">
-      <.flash kind={:info} flash={@flash} />
-      <.flash kind={:error} flash={@flash} />
-
-      <.flash
-        id="client-error"
-        kind={:error}
-        auto_dismiss={true}
-        title="We can't find the internet"
-        phx-disconnected={show(".phx-client-error #client-error") |> JS.remove_attribute("hidden")}
-        phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
-        hidden
-      >
-        Attempting to reconnect
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
-
-      <.flash
-        id="server-error"
-        kind={:error}
-        auto_dismiss={true}
-        title="Something went wrong!"
-        phx-disconnected={show(".phx-server-error #server-error") |> JS.remove_attribute("hidden")}
-        phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
-        hidden
-      >
-        Attempting to reconnect
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-      </.flash>
-    </div>
+    <.pp_flash_group id={@id} flash={@flash} auto_hide_duration={6000} connection_notices />
     """
   end
 
   @doc """
-  Provides dark vs light theme toggle based on themes defined in app.css.
+  Provides the System / Light / Dark theme toggle (MD3 segmented control).
 
-  See <head> in root.html.heex which applies the theme before page load.
+  It sets `data-theme` on `<html>` and persists the choice under
+  `localStorage["phx:theme"]`; the `<head>` script in root.html.heex restores
+  it before first paint.
   """
   def theme_toggle(assigns) do
     ~H"""
-    <.pp_theme_toggle label={nil} />
+    <.pp_theme_toggle />
     """
-  end
-
-  # A text/ghost button look for `<.link>`-based nav actions in the app bar,
-  # matching PhoenixPaper's `pp_button variant="text"` without nesting a
-  # <button> inside an <a>.
-  defp nav_action_classes do
-    "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium uppercase tracking-wide " <>
-      "text-pp-primary transition-colors hover:bg-pp-primary/10"
   end
 end

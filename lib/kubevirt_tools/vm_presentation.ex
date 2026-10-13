@@ -308,7 +308,7 @@ defmodule KubevirtTools.VmPresentation do
         not ready ->
           {sched, cord, down + 1}
 
-        ready and cordoned ->
+        cordoned ->
           {sched, cord + 1, down}
 
         true ->
@@ -333,54 +333,64 @@ defmodule KubevirtTools.VmPresentation do
     get_in(item, ["status", "printableStatus"]) || "—"
   end
 
-  def vm_phase_badge_classes(vm) do
-    phase =
-      vm
-      |> vm_phase()
-      |> to_string()
-      |> String.trim()
-      |> String.downcase()
+  @doc """
+  Status tone for a VM's printable status (see `phase_tone/1`).
+  """
+  def vm_phase_tone(vm), do: phase_tone(vm_phase(vm))
 
-    extra =
-      cond do
-        phase in ["", "—"] ->
-          ["badge-ghost", "border", "border-base-300/55", "text-base-content/75"]
+  @doc """
+  Status tone for a VM/VMI phase string, rendered by the web layer as a
+  status chip: `:ok` running, `:stopped` stopped, `:warning` transitional,
+  `:error` failures, `:info` waiting/pending/unknown, `:neutral` otherwise.
+  """
+  @spec phase_tone(String.t() | nil) :: :ok | :stopped | :warning | :error | :info | :neutral
+  def phase_tone(phase) do
+    phase = phase |> to_string() |> String.trim() |> String.downcase()
 
-        phase == "running" ->
-          ["badge-success"]
+    cond do
+      phase in ["", "—"] ->
+        :neutral
 
-        phase == "stopped" ->
-          ["badge-neutral"]
+      phase in ["running", "succeeded"] ->
+        :ok
 
-        phase in [
-          "starting",
-          "stopping",
-          "terminating",
-          "migrating",
-          "provisioning",
-          "paused"
-        ] ->
-          ["badge-warning"]
+      phase == "stopped" ->
+        :stopped
 
-        String.contains?(phase, "error") or String.contains?(phase, "failed") or
-            String.contains?(phase, "crash") ->
-          [
-            "border-0",
-            "bg-[color:var(--color-stopped)]",
-            "text-[color:var(--color-stopped-content)]",
-            "shadow-sm"
-          ]
+      phase in [
+        "starting",
+        "stopping",
+        "terminating",
+        "migrating",
+        "provisioning",
+        "paused",
+        "scheduling",
+        "scheduled"
+      ] ->
+        :warning
 
-        String.contains?(phase, "waiting") or String.contains?(phase, "pending") or
-            phase == "unknown" ->
-          ["badge-info"]
+      String.contains?(phase, "error") or String.contains?(phase, "failed") or
+          String.contains?(phase, "crash") ->
+        :error
 
-        true ->
-          ["badge-ghost", "border", "border-base-300/55", "text-base-content/80"]
-      end
+      String.contains?(phase, "waiting") or String.contains?(phase, "pending") or
+          phase == "unknown" ->
+        :info
 
-    ["badge", "badge-sm"] ++ extra
+      true ->
+        :neutral
+    end
   end
+
+  @doc """
+  Status tone for a PersistentVolumeClaim phase: `:ok` Bound, `:info`
+  Pending, `:error` Lost, `:neutral` otherwise.
+  """
+  @spec pvc_phase_tone(String.t() | nil) :: :ok | :info | :error | :neutral
+  def pvc_phase_tone("Bound"), do: :ok
+  def pvc_phase_tone("Pending"), do: :info
+  def pvc_phase_tone("Lost"), do: :error
+  def pvc_phase_tone(_phase), do: :neutral
 
   def vmi_phase(item) do
     get_in(item, ["status", "phase"]) || "—"
@@ -558,14 +568,15 @@ defmodule KubevirtTools.VmPresentation do
   end
 
   @doc """
-  Tailwind color class for a usage percent, matching the dashboard's stat-tile
-  palette: teal (primary) below 50%, amber 50–79%, red (stopped) 80% and above.
+  Status tone for a usage percent, matching the dashboard's stat tiles:
+  `:ok` below 50%, `:warning` 50–79%, `:stopped` (soft red) 80% and above,
+  `:muted` when unknown.
   """
-  @spec usage_pct_color_class(0..100 | nil) :: String.t()
-  def usage_pct_color_class(nil), do: "text-base-content/40"
-  def usage_pct_color_class(pct) when pct >= 80, do: "text-stopped"
-  def usage_pct_color_class(pct) when pct >= 50, do: "text-amber-400"
-  def usage_pct_color_class(_pct), do: "text-primary"
+  @spec usage_pct_tone(0..100 | nil) :: :ok | :warning | :stopped | :muted
+  def usage_pct_tone(nil), do: :muted
+  def usage_pct_tone(pct) when pct >= 80, do: :stopped
+  def usage_pct_tone(pct) when pct >= 50, do: :warning
+  def usage_pct_tone(_pct), do: :ok
 
   @doc """
   Precomputed row data for the VMs table — one map per VM with every display
@@ -587,7 +598,7 @@ defmodule KubevirtTools.VmPresentation do
         namespace: vm_meta(vm, :namespace),
         name: vm_meta(vm, :name),
         phase: vm_phase(vm),
-        phase_badge_classes: vm_phase_badge_classes(vm),
+        phase_tone: vm_phase_tone(vm),
         cpu_display: vm_cpu_usage_display(vm, vmi, usage),
         cpu_pct: vm_cpu_usage_pct(vm, vmi, usage),
         mem_display: vm_mem_usage_display(vm, vmi, usage),
@@ -732,7 +743,7 @@ defmodule KubevirtTools.VmPresentation do
   end
 
   def vm_volume_storage_gib_contribution(vol, dvt_by_name, vm_ns, pvc_by_ns_claim)
-       when is_map(vol) do
+      when is_map(vol) do
     cond do
       is_binary(get_in(vol, ["dataVolume", "name"])) ->
         dv_name = get_in(vol, ["dataVolume", "name"])
@@ -1213,7 +1224,7 @@ defmodule KubevirtTools.VmPresentation do
   def normalize_usage_pct_display(s) when is_binary(s), do: s
 
   def prometheus_exporter_pct_by_node(_nodes, detail)
-       when detail == nil or detail == %{} do
+      when detail == nil or detail == %{} do
     %{}
   end
 

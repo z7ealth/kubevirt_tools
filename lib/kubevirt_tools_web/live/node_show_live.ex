@@ -121,60 +121,51 @@ defmodule KubevirtToolsWeb.NodeShowLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={%{}}>
       <div class="space-y-6 max-w-full min-w-0">
-        <.link
-          navigate={~p"/dashboard?tab=nodes"}
-          class="text-sm text-pp-primary hover:underline"
-        >
-          &larr; Back to Nodes
-        </.link>
+        <.pp_breadcrumbs id="node-breadcrumbs">
+          <:item navigate={~p"/dashboard"}>Dashboard</:item>
+          <:item navigate={~p"/dashboard?tab=nodes"}>Nodes</:item>
+          <:item>{@name}</:item>
+        </.pp_breadcrumbs>
 
         <.async_result :let={data} assign={@node_detail}>
           <:loading>
-            <.pp_paper
-              elevation={0}
-              class="flex items-center gap-3 border border-pp-outline/20 bg-pp-surface-variant/40 px-5 py-12 text-pp-on-surface/70"
-            >
-              <.icon name="hero-arrow-path" class="size-6 motion-safe:animate-spin" />
-              <span>Loading node…</span>
-            </.pp_paper>
+            <.loading_card label="Loading node…" />
           </:loading>
           <:failed :let={_failure}>
-            <.pp_alert severity="error">
+            <.banner kind={:error}>
               Could not load this node. Try refreshing or signing in again.
-            </.pp_alert>
+            </.banner>
           </:failed>
 
-          <.pp_alert :if={!data.found?} severity="warning">
+          <.banner :if={!data.found?} kind={:warning}>
             Node <span class="font-mono">{@name}</span> was not found — it may have been removed.
-          </.pp_alert>
+          </.banner>
 
           <div :if={data.found?} class="space-y-6">
-            <div>
-              <h1 class="text-2xl font-semibold tracking-tight flex items-center gap-3">
-                <.icon name="hero-server-stack" class="size-6 text-pp-primary" /> {data.row.name}
-                <.pp_chip :if={data.row.is_ready} size="small" color="success">Ready</.pp_chip>
-                <.pp_chip :if={!data.row.is_ready} size="small" color="error">Not ready</.pp_chip>
-              </h1>
-            </div>
+            <.page_title icon="hero-server-stack">
+              {data.row.name}
+              <:chips>
+                <.status_chip :if={data.row.is_ready} tone={:ok}>Ready</.status_chip>
+                <.status_chip :if={!data.row.is_ready} tone={:error}>Not ready</.status_chip>
+              </:chips>
+            </.page_title>
 
-            <.pp_paper class="p-4">
-              <.list>
-                <:item title="Role">{data.row.role}</:item>
-                <:item title="OS">{data.row.os_image}</:item>
-                <:item title="Scheduling">{data.row.scheduling}</:item>
-                <:item title="VMIs">{data.row.vmi_count}</:item>
-                <:item title="CPU %">{data.row.cpu_pct}</:item>
-                <:item title="Memory %">{data.row.mem_pct}</:item>
-                <:item title="Internal IP">{data.row.internal_ip}</:item>
-                <:item title="External IP">{data.row.external_ip}</:item>
-                <:item title="CPU (allocatable)">{data.row.cpu_alloc}</:item>
-                <:item title="Memory (allocatable)">{data.row.mem_alloc}</:item>
-                <:item title="Max pods">{data.row.pods_alloc}</:item>
-                <:item title="Kubelet">{data.row.kubelet}</:item>
-                <:item title="OS / arch">{data.row.os_arch}</:item>
-                <:item title="Container runtime">{data.row.runtime}</:item>
-              </.list>
-            </.pp_paper>
+            <.list id="node-details">
+              <:item title="Role">{data.row.role}</:item>
+              <:item title="OS">{data.row.os_image}</:item>
+              <:item title="Scheduling">{data.row.scheduling}</:item>
+              <:item title="VMIs">{data.row.vmi_count}</:item>
+              <:item title="CPU %">{data.row.cpu_pct}</:item>
+              <:item title="Memory %">{data.row.mem_pct}</:item>
+              <:item title="Internal IP">{data.row.internal_ip}</:item>
+              <:item title="External IP">{data.row.external_ip}</:item>
+              <:item title="CPU (allocatable)">{data.row.cpu_alloc}</:item>
+              <:item title="Memory (allocatable)">{data.row.mem_alloc}</:item>
+              <:item title="Max pods">{data.row.pods_alloc}</:item>
+              <:item title="Kubelet">{data.row.kubelet}</:item>
+              <:item title="OS / arch">{data.row.os_arch}</:item>
+              <:item title="Container runtime">{data.row.runtime}</:item>
+            </.list>
 
             <% overlay_message =
               "Requires Prometheus scraping node_exporter — set PROMETHEUS_URL (see README)"
@@ -209,7 +200,7 @@ defmodule KubevirtToolsWeb.NodeShowLive do
                 opts={
                   DashboardCharts.usage_area_chart(mem_points,
                     name: "Memory %",
-                    color: "var(--color-info)"
+                    color: "var(--color-pp-tertiary)"
                   )
                 }
                 dependency_overlay={overlay}
@@ -217,11 +208,9 @@ defmodule KubevirtToolsWeb.NodeShowLive do
             </div>
 
             <div class="space-y-3">
-              <h2 class="text-lg font-medium flex items-center gap-2">
-                <.icon name="hero-cpu-chip" class="size-5 text-pp-primary" /> VMs on this node
-              </h2>
+              <.section_title icon="hero-cpu-chip">VMs on this node</.section_title>
               <.pp_table_container>
-                <.pp_table dense>
+                <.pp_table>
                   <.pp_table_head>
                     <.pp_table_row>
                       <.pp_table_cell variant="head">Namespace</.pp_table_cell>
@@ -232,27 +221,41 @@ defmodule KubevirtToolsWeb.NodeShowLive do
                   </.pp_table_head>
                   <.pp_table_body>
                     <.pp_table_row :if={data.vmis == []}>
-                      <.pp_table_cell colspan="4" align="center" class="text-pp-on-surface/50 py-6">
+                      <.pp_table_cell
+                        colspan="4"
+                        align="center"
+                        class="py-8 text-pp-on-surface-variant"
+                      >
                         No VMIs scheduled on this node.
                       </.pp_table_cell>
                     </.pp_table_row>
-                    <.pp_table_row :for={vmi <- data.vmis}>
-                      <.pp_table_cell class="font-mono text-xs">
+                    <.pp_table_row
+                      :for={vmi <- data.vmis}
+                      class="cursor-pointer"
+                      phx-click={
+                        JS.navigate(~p"/vms/#{vm_meta(vmi, :namespace)}/#{vm_meta(vmi, :name)}")
+                      }
+                    >
+                      <.pp_table_cell class="font-mono text-pp-on-surface-variant">
                         {vm_meta(vmi, :namespace)}
                       </.pp_table_cell>
-                      <.pp_table_cell class="font-mono text-xs font-medium">
+                      <.pp_table_cell class="font-mono font-medium">
                         {vm_meta(vmi, :name)}
                       </.pp_table_cell>
-                      <.pp_table_cell class="text-xs">
-                        <.pp_chip size="small">{vmi_phase(vmi)}</.pp_chip>
+                      <.pp_table_cell>
+                        <.status_chip tone={phase_tone(vmi_phase(vmi))}>
+                          {vmi_phase(vmi)}
+                        </.status_chip>
                       </.pp_table_cell>
-                      <.pp_table_cell class="text-xs">
+                      <.pp_table_cell>
                         <.icon
                           :if={vmi_agent_connected?(vmi)}
                           name="hero-command-line"
-                          class="size-4 text-pp-info"
+                          class="size-5 text-pp-primary"
                         />
-                        <span :if={!vmi_agent_connected?(vmi)} class="text-pp-on-surface/40">—</span>
+                        <span :if={!vmi_agent_connected?(vmi)} class="text-pp-on-surface-variant">
+                          —
+                        </span>
                       </.pp_table_cell>
                     </.pp_table_row>
                   </.pp_table_body>

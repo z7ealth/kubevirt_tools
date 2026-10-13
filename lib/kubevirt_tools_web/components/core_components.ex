@@ -3,10 +3,14 @@ defmodule KubevirtToolsWeb.CoreComponents do
   Provides core UI components.
 
   These are thin wrappers over [PhoenixPaper](https://hexdocs.pm/phoenix_paper)
-  (`pp_*` Material Design function components) — the app's UI layer was migrated
-  to PhoenixPaper while keeping daisyUI installed for the charts, topology and
-  welcome-screen theming. See `assets/css/app.css` for how PhoenixPaper's
-  `--color-pp-*` tokens are pointed at the daisyUI (kubevirt teal) palette.
+  (`pp_*` Material Design 3 function components), plus a few app-level
+  composites built only from MD3 parts for what MD3 leaves open (banners,
+  status chips, loading placeholders). daisyUI stays installed only for the
+  theme variables the charts, topology and welcome screen read.
+
+  Colors come from the MD3 scheme in `assets/css/phoenix_paper_theme.css`
+  (generated from the kubevirt.io teal), plus the app-level `app-warning`
+  custom color defined in `assets/css/app.css`.
 
   Useful references:
 
@@ -21,107 +25,9 @@ defmodule KubevirtToolsWeb.CoreComponents do
   alias Phoenix.LiveView.JS
 
   @doc """
-  Renders flash notices as a PhoenixPaper alert in a top-end toast.
-
-  ## Examples
-
-      <.flash kind={:info} flash={@flash} />
-      <.flash kind={:info} phx-mounted={show("#flash")}>Welcome Back!</.flash>
-  """
-  attr :id, :string, doc: "the optional id of flash container"
-  attr :flash, :map, default: %{}, doc: "the map of flash messages to display"
-  attr :title, :string, default: nil
-  attr :kind, :atom, values: [:info, :error], doc: "used for styling and flash lookup"
-  attr :auto_dismiss, :boolean, default: true, doc: "clear flash when the progress animation ends"
-  attr :rest, :global, doc: "the arbitrary HTML attributes to add to the flash container"
-
-  slot :inner_block, doc: "the optional inner block that renders the flash message"
-
-  def flash(assigns) do
-    assigns = assign_new(assigns, :id, fn -> "flash-#{assigns.kind}" end)
-
-    ~H"""
-    <%= if msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind) do %>
-      <div
-        id={@id}
-        phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
-        phx-hook=".FlashAutoDismiss"
-        data-flash-kind={if(@auto_dismiss, do: to_string(@kind))}
-        role="alert"
-        class="toast toast-top toast-end z-50"
-        {@rest}
-      >
-        <div class="relative w-80 sm:w-96 max-w-80 sm:max-w-96 overflow-hidden">
-          <.pp_alert severity={severity(@kind)} variant="standard" class="shadow-lg pr-2">
-            <:title :if={@title}>{@title}</:title>
-            {msg}
-            <:action>
-              <button type="button" class="group shrink-0 cursor-pointer" aria-label="close">
-                <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
-              </button>
-            </:action>
-          </.pp_alert>
-          <div
-            :if={@auto_dismiss}
-            class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-pp-on-surface/10"
-            aria-hidden="true"
-          >
-            <div class="flash-progress-bar-fill h-full w-full bg-pp-primary" />
-          </div>
-        </div>
-      </div>
-      <script :if={@auto_dismiss} :type={Phoenix.LiveView.ColocatedHook} name=".FlashAutoDismiss">
-        export default {
-          mounted() {
-            const bar = this.el.querySelector(".flash-progress-bar-fill")
-            const kind = this.el.dataset.flashKind
-            if (!bar || !kind) return
-
-            this._dismissed = false
-            const dismiss = () => {
-              if (this._dismissed) return
-              this._dismissed = true
-              if (this._timer) window.clearTimeout(this._timer)
-              this._timer = null
-              this.pushEvent("lv:clear-flash", { key: kind })
-              this.js().hide(this.el)
-            }
-
-            /* Must match `flash-progress-bar` duration in app.css (6s). */
-            const durationMs = 6000
-
-            this._onAnimationEnd = (e) => {
-              if (e.target !== bar) return
-              if (e.animationName && e.animationName !== "flash-progress-bar") return
-              dismiss()
-            }
-
-            const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-            if (reduced) {
-              this._timer = window.setTimeout(dismiss, durationMs)
-            } else {
-              bar.addEventListener("animationend", this._onAnimationEnd)
-              this._timer = window.setTimeout(dismiss, durationMs)
-            }
-          },
-          destroyed() {
-            if (this._timer) window.clearTimeout(this._timer)
-            const bar = this.el.querySelector(".flash-progress-bar-fill")
-            if (bar && this._onAnimationEnd) {
-              bar.removeEventListener("animationend", this._onAnimationEnd)
-            }
-          }
-        }
-      </script>
-    <% end %>
-    """
-  end
-
-  defp severity(:info), do: "info"
-  defp severity(:error), do: "error"
-
-  @doc """
   Renders a button, backed by `PhoenixPaper.Button.pp_button/1`.
+
+  Passing `href`, `navigate` or `patch` renders a link with the same look.
 
   ## Examples
 
@@ -133,40 +39,18 @@ defmodule KubevirtToolsWeb.CoreComponents do
     include: ~w(href navigate patch method download name value disabled type form)
 
   attr :class, :any, default: nil
-  attr :variant, :string, default: nil, doc: ~s|"primary" for a raised button, nil for flat|
+  attr :variant, :string, default: nil, doc: ~s|"primary" for a filled button, nil for tonal|
   slot :inner_block, required: true
 
-  def button(%{rest: rest} = assigns) do
+  def button(assigns) do
     assigns =
-      assign(assigns, :pp_variant, if(assigns.variant == "primary", do: "raised", else: "flat"))
+      assign(assigns, :pp_variant, if(assigns.variant == "primary", do: "filled", else: "tonal"))
 
-    if rest[:href] || rest[:navigate] || rest[:patch] do
-      ~H"""
-      <.link
-        class={[
-          "inline-flex items-center justify-center gap-2 rounded-full px-6 py-2.5 text-sm font-medium uppercase tracking-wide",
-          "bg-pp-primary text-pp-on-primary transition hover:brightness-110",
-          @class
-        ]}
-        {@rest}
-      >
-        {render_slot(@inner_block)}
-      </.link>
-      """
-    else
-      ~H"""
-      <.pp_button
-        variant={@pp_variant}
-        color="primary"
-        type={@rest[:type] || "button"}
-        disabled={!!@rest[:disabled]}
-        class={@class}
-        {Map.drop(@rest, [:type, :disabled, :href, :navigate, :patch, :method, :download])}
-      >
-        {render_slot(@inner_block)}
-      </.pp_button>
-      """
-    end
+    ~H"""
+    <.pp_button variant={@pp_variant} class={@class} {@rest}>
+      {render_slot(@inner_block)}
+    </.pp_button>
+    """
   end
 
   @doc """
@@ -174,7 +58,8 @@ defmodule KubevirtToolsWeb.CoreComponents do
 
   A `Phoenix.HTML.FormField` may be passed as `field`, otherwise pass `name`,
   `value` and friends explicitly. `type="select"` renders `pp_select/1`,
-  `type="checkbox"` renders `pp_checkbox/1`, everything else `pp_input/1`.
+  `type="checkbox"` `pp_checkbox/1`, `type="password"` `pp_password_field/1`,
+  `type="number"` `pp_number_field/1`, everything else `pp_text_field/1`.
   """
   attr :id, :any, default: nil
   attr :name, :any
@@ -231,6 +116,7 @@ defmodule KubevirtToolsWeb.CoreComponents do
         name={@name}
         label={@label}
         checked={@checked}
+        error={@errors != []}
         disabled={!!@rest[:disabled]}
         class={@class}
       />
@@ -250,8 +136,9 @@ defmodule KubevirtToolsWeb.CoreComponents do
         prompt={@prompt}
         options={@options}
         errors={@errors}
+        disabled={!!@rest[:disabled]}
         class={@class}
-        {@rest}
+        {Map.drop(@rest, [:disabled])}
       />
     </div>
     """
@@ -260,7 +147,7 @@ defmodule KubevirtToolsWeb.CoreComponents do
   def input(%{type: "textarea"} = assigns) do
     ~H"""
     <div class="mb-2">
-      <.pp_input
+      <.pp_text_field
         multiline
         rows={@rows}
         id={@id}
@@ -268,8 +155,43 @@ defmodule KubevirtToolsWeb.CoreComponents do
         label={@label}
         value={Phoenix.HTML.Form.normalize_value("textarea", @value)}
         errors={@errors}
+        disabled={!!@rest[:disabled]}
         class={@class}
-        {@rest}
+        {Map.drop(@rest, [:disabled])}
+      />
+    </div>
+    """
+  end
+
+  def input(%{type: "password"} = assigns) do
+    ~H"""
+    <div class="mb-2">
+      <.pp_password_field
+        id={@id}
+        name={@name}
+        label={@label}
+        value={@value}
+        errors={@errors}
+        disabled={!!@rest[:disabled]}
+        class={@class}
+        {Map.drop(@rest, [:disabled])}
+      />
+    </div>
+    """
+  end
+
+  def input(%{type: "number"} = assigns) do
+    ~H"""
+    <div class="mb-2">
+      <.pp_number_field
+        id={@id}
+        name={@name}
+        label={@label}
+        value={Phoenix.HTML.Form.normalize_value("number", @value)}
+        errors={@errors}
+        disabled={!!@rest[:disabled]}
+        class={@class}
+        {Map.drop(@rest, [:disabled])}
       />
     </div>
     """
@@ -278,15 +200,16 @@ defmodule KubevirtToolsWeb.CoreComponents do
   def input(assigns) do
     ~H"""
     <div class="mb-2">
-      <.pp_input
+      <.pp_text_field
         type={@type}
         id={@id}
         name={@name}
         label={@label}
         value={Phoenix.HTML.Form.normalize_value(@type, @value)}
         errors={@errors}
+        disabled={!!@rest[:disabled]}
         class={@class}
-        {@rest}
+        {Map.drop(@rest, [:disabled])}
       />
     </div>
     """
@@ -298,7 +221,7 @@ defmodule KubevirtToolsWeb.CoreComponents do
 
   def error(assigns) do
     ~H"""
-    <p class="mt-1.5 flex gap-2 items-center text-sm text-pp-error">
+    <p class="mt-1.5 flex gap-2 items-center pp-body-small text-pp-error" {@rest}>
       <.icon name="hero-exclamation-circle" class="size-5" />
       {render_slot(@inner_block)}
     </p>
@@ -317,15 +240,202 @@ defmodule KubevirtToolsWeb.CoreComponents do
     ~H"""
     <header class={[@actions != [] && "flex items-center justify-between gap-6", "pb-4", @class]}>
       <div>
-        <.pp_typography variant="h5" class="leading-8">
+        <.pp_typography variant="headline-small">
           {render_slot(@inner_block)}
         </.pp_typography>
-        <.pp_typography :if={@subtitle != []} variant="body2" class="text-pp-on-surface/70">
+        <.pp_typography :if={@subtitle != []} variant="body-medium" color="on-surface-variant">
           {render_slot(@subtitle)}
         </.pp_typography>
       </div>
       <div class="flex-none">{render_slot(@actions)}</div>
     </header>
+    """
+  end
+
+  @doc """
+  Renders a page title: an optional eyebrow, an MD3 headline with a leading
+  icon and trailing status chips, and an optional supporting line.
+
+  ## Examples
+
+      <.page_title icon="hero-server-stack">
+        {node.name}
+        <:chips><.status_chip tone={:ok}>Ready</.status_chip></:chips>
+      </.page_title>
+  """
+  attr :icon, :string, default: nil
+  attr :eyebrow, :string, default: nil
+  attr :class, :any, default: nil
+  slot :inner_block, required: true
+  slot :chips
+  slot :subtitle
+
+  def page_title(assigns) do
+    ~H"""
+    <div class={["min-w-0", @class]}>
+      <p :if={@eyebrow} class="pp-label-medium text-pp-primary">{@eyebrow}</p>
+      <h1 class="flex flex-wrap items-center gap-3 pp-headline-small text-pp-on-surface">
+        <.icon :if={@icon} name={@icon} class="size-7 text-pp-primary" />
+        <span class="min-w-0 break-words">{render_slot(@inner_block)}</span>
+        {render_slot(@chips)}
+      </h1>
+      <p :if={@subtitle != []} class="mt-1 pp-body-medium text-pp-on-surface-variant">
+        {render_slot(@subtitle)}
+      </p>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a section heading (MD3 `title-large`) with a leading icon.
+  """
+  attr :icon, :string, default: nil
+  attr :tag, :string, default: "h2", values: ~w(h2 h3)
+  attr :class, :any, default: nil
+  slot :inner_block, required: true
+
+  def section_title(assigns) do
+    ~H"""
+    <.dynamic_tag
+      tag_name={@tag}
+      class={[
+        "flex items-center gap-2 text-pp-on-surface",
+        if(@tag == "h2", do: "pp-title-large", else: "pp-title-medium"),
+        @class
+      ]}
+    >
+      <.icon :if={@icon} name={@icon} class="size-6 text-pp-primary" />
+      {render_slot(@inner_block)}
+    </.dynamic_tag>
+    """
+  end
+
+  @doc """
+  Renders a banner: an inline, persistent message on a container color.
+
+  MD3 has no alert component (PhoenixPaper 0.5 removed `Alert`); this is a
+  composite of MD3 parts — a `-container` color role, `lg` corners, a
+  leading icon and `body-medium` text. `:error` uses MD3's error container,
+  `:warning` the app's `app-warning` custom color, `:info` the secondary
+  container.
+
+  ## Examples
+
+      <.banner kind={:error}>Could not load cluster data.</.banner>
+      <.banner kind={:warning} title="Prometheus not detected">Set PROMETHEUS_URL.</.banner>
+  """
+  attr :kind, :atom, default: :info, values: [:info, :warning, :error]
+  attr :title, :string, default: nil
+  attr :icon, :string, default: nil, doc: "overrides the kind's default icon"
+  attr :class, :any, default: nil
+  attr :rest, :global
+  slot :inner_block, required: true
+
+  def banner(assigns) do
+    assigns = assign(assigns, :icon, assigns.icon || banner_icon(assigns.kind))
+
+    ~H"""
+    <div
+      role={if(@kind == :error, do: "alert", else: "status")}
+      class={[
+        "flex items-start gap-3 rounded-pp-lg px-4 py-3 pp-body-medium",
+        banner_colors(@kind),
+        @class
+      ]}
+      {@rest}
+    >
+      <.icon name={@icon} class="mt-0.5 size-5 shrink-0" />
+      <div class="min-w-0">
+        <p :if={@title} class="pp-title-small">{@title}</p>
+        <div class={[@title && "mt-0.5"]}>{render_slot(@inner_block)}</div>
+      </div>
+    </div>
+    """
+  end
+
+  defp banner_colors(:info), do: "bg-pp-secondary-container text-pp-on-secondary-container"
+  defp banner_colors(:warning), do: "bg-app-warning-container text-app-on-warning-container"
+  defp banner_colors(:error), do: "bg-pp-error-container text-pp-on-error-container"
+
+  defp banner_icon(:info), do: "hero-information-circle"
+  defp banner_icon(:warning), do: "hero-exclamation-triangle"
+  defp banner_icon(:error), do: "hero-exclamation-circle"
+
+  @doc """
+  Renders a non-interactive MD3 input chip whose leading icon carries a
+  status tone. MD3 chips have one color scheme, so the status lives in the
+  icon (and its text alternative), not in a colored chip.
+
+  Tones: `:ok`, `:warning`, `:error`, `:stopped`, `:info`, `:neutral`.
+
+  ## Examples
+
+      <.status_chip tone={:ok}>Ready</.status_chip>
+      <.status_chip tone={:neutral} icon="hero-star-mini" selected>default</.status_chip>
+  """
+  attr :tone, :atom, default: :neutral, values: [:ok, :warning, :error, :stopped, :info, :neutral]
+  attr :icon, :string, default: nil, doc: "overrides the tone's default icon"
+  attr :selected, :boolean, default: false, doc: "MD3's selected (secondary-container) chip"
+  attr :class, :any, default: nil
+  attr :rest, :global
+  slot :inner_block, required: true
+
+  def status_chip(assigns) do
+    assigns = assign(assigns, :icon, assigns.icon || tone_icon(assigns.tone))
+
+    ~H"""
+    <.pp_chip
+      variant="input"
+      selected={@selected}
+      class={["h-7 shrink-0 align-middle", @class]}
+      {@rest}
+    >
+      <:icon :if={@icon}><.icon name={@icon} class={tone_text_class(@tone)} /></:icon>
+      {render_slot(@inner_block)}
+    </.pp_chip>
+    """
+  end
+
+  defp tone_icon(:ok), do: "hero-check-circle-mini"
+  defp tone_icon(:warning), do: "hero-exclamation-triangle-mini"
+  defp tone_icon(:error), do: "hero-x-circle-mini"
+  defp tone_icon(:stopped), do: "hero-stop-circle-mini"
+  defp tone_icon(:info), do: "hero-clock-mini"
+  defp tone_icon(:neutral), do: nil
+
+  @doc """
+  The text color class for a status tone (see `status_chip/1`). Classes are
+  literal strings so Tailwind's scanner finds them.
+  """
+  def tone_text_class(:ok), do: "text-pp-primary"
+  def tone_text_class(:warning), do: "text-app-warning"
+  def tone_text_class(:error), do: "text-pp-error"
+  def tone_text_class(:stopped), do: "text-stopped"
+  def tone_text_class(:info), do: "text-pp-tertiary"
+  def tone_text_class(:neutral), do: "text-pp-on-surface-variant"
+  def tone_text_class(:muted), do: "text-pp-on-surface-variant/60"
+
+  @doc """
+  Renders a loading placeholder: MD3's Expressive loading indicator on a
+  filled card.
+  """
+  attr :label, :string, required: true
+  attr :class, :any, default: nil
+  attr :rest, :global
+
+  def loading_card(assigns) do
+    ~H"""
+    <div
+      class={[
+        "flex items-center gap-4 rounded-pp-md bg-pp-surface-container px-5 py-10",
+        "pp-body-large text-pp-on-surface-variant",
+        @class
+      ]}
+      {@rest}
+    >
+      <.pp_loading_indicator size={40} label={@label} />
+      <span>{@label}</span>
+    </div>
     """
   end
 
@@ -361,8 +471,8 @@ defmodule KubevirtToolsWeb.CoreComponents do
       end
 
     ~H"""
-    <.pp_table_container>
-      <.pp_table dense>
+    <.pp_table_container variant="outlined">
+      <.pp_table>
         <.pp_table_head>
           <.pp_table_row>
             <.pp_table_cell :for={col <- @col} variant="head">{col[:label]}</.pp_table_cell>
@@ -383,7 +493,7 @@ defmodule KubevirtToolsWeb.CoreComponents do
             >
               {render_slot(col, @row_item.(row))}
             </.pp_table_cell>
-            <.pp_table_cell :if={@action != []} class="w-0 font-semibold">
+            <.pp_table_cell :if={@action != []} class="w-0">
               <div class="flex gap-4">
                 {for action <- @action, do: render_slot(action, @row_item.(row))}
               </div>
@@ -396,7 +506,7 @@ defmodule KubevirtToolsWeb.CoreComponents do
   end
 
   @doc """
-  Renders a data list.
+  Renders a data list on an outlined MD3 card.
 
   ## Examples
 
@@ -405,18 +515,26 @@ defmodule KubevirtToolsWeb.CoreComponents do
         <:item title="Views">{@post.views}</:item>
       </.list>
   """
+  attr :id, :string, default: nil
+  attr :class, :any, default: nil
+
   slot :item, required: true do
     attr :title, :string, required: true
   end
 
   def list(assigns) do
     ~H"""
-    <ul class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-3 list-none p-0 m-0">
-      <li :for={item <- @item} class="border-b border-pp-outline/30 pb-2">
-        <div class="font-bold">{item.title}</div>
-        <div>{render_slot(item)}</div>
-      </li>
-    </ul>
+    <.pp_card id={@id} variant="outlined" class={@class}>
+      <dl class="grid grid-cols-1 gap-x-8 gap-y-1 sm:grid-cols-2 xl:grid-cols-3">
+        <div
+          :for={item <- @item}
+          class="min-w-0 border-b border-pp-outline-variant py-2.5"
+        >
+          <dt class="pp-label-medium text-pp-on-surface-variant">{item.title}</dt>
+          <dd class="mt-0.5 pp-body-large text-pp-on-surface break-words">{render_slot(item)}</dd>
+        </div>
+      </dl>
+    </.pp_card>
     """
   end
 

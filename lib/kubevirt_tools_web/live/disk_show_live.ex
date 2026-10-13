@@ -58,41 +58,32 @@ defmodule KubevirtToolsWeb.DiskShowLive do
     ~H"""
     <Layouts.app flash={@flash} current_scope={%{}}>
       <div class="space-y-6 max-w-full min-w-0">
-        <.link
-          navigate={~p"/dashboard?tab=disks"}
-          class="text-sm text-pp-primary hover:underline"
-        >
-          &larr; Back to Disks
-        </.link>
+        <.pp_breadcrumbs id="disk-breadcrumbs">
+          <:item navigate={~p"/dashboard"}>Dashboard</:item>
+          <:item navigate={~p"/dashboard?tab=disks"}>Disks</:item>
+          <:item>{@disk_name}</:item>
+        </.pp_breadcrumbs>
 
         <.async_result :let={data} assign={@row_detail}>
           <:loading>
-            <.pp_paper
-              elevation={0}
-              class="flex items-center gap-3 border border-pp-outline/20 bg-pp-surface-variant/40 px-5 py-12 text-pp-on-surface/70"
-            >
-              <.icon name="hero-arrow-path" class="size-6 motion-safe:animate-spin" />
-              <span>Loading disk…</span>
-            </.pp_paper>
+            <.loading_card label="Loading disk…" />
           </:loading>
           <:failed :let={_failure}>
-            <.pp_alert severity="error">
+            <.banner kind={:error}>
               Could not load this disk. Try refreshing or signing in again.
-            </.pp_alert>
+            </.banner>
           </:failed>
 
-          <.pp_alert :if={!data.found?} severity="warning">
+          <.banner :if={!data.found?} kind={:warning}>
             Disk <span class="font-mono">{@disk_name}</span>
             on <span class="font-mono">{@namespace}/{@vm_name}</span>
             was not found — the VM or its disks may have changed.
-          </.pp_alert>
+          </.banner>
 
           <div :if={data.found?} class="space-y-6">
-            <div>
-              <h1 class="text-2xl font-semibold tracking-tight flex items-center gap-3">
-                <.icon name="hero-circle-stack" class="size-6 text-primary" /> {data.row.disk_name}
-              </h1>
-              <p class="text-sm text-base-content/60 mt-1">
+            <.page_title icon="hero-circle-stack">
+              {data.row.disk_name}
+              <:subtitle>
                 on
                 <.link
                   navigate={~p"/vms/#{@namespace}/#{@vm_name}"}
@@ -100,24 +91,22 @@ defmodule KubevirtToolsWeb.DiskShowLive do
                 >
                   {@namespace}/{@vm_name}
                 </.link>
-              </p>
-            </div>
+              </:subtitle>
+            </.page_title>
 
-            <.pp_paper class="p-4">
-              <.list>
-                <:item title="Device">{data.row.device_kind}</:item>
-                <:item title="Bus">{data.row.bus}</:item>
-                <:item title="Boot order">{data.row.boot_order}</:item>
-                <:item title="Removable">{if(data.row.removable?, do: "Yes", else: "No")}</:item>
-                <:item title="Volume kind">{data.row.volume_kind}</:item>
-                <:item title="Source">{data.row.source}</:item>
-                <:item title="Size">{data.row.size}</:item>
-                <:item title="Storage class">{data.row.storage_class}</:item>
-                <:item title="PVC phase">{data.row.pvc_phase}</:item>
-                <:item title="Serial">{data.row.serial}</:item>
-                <:item title="Cache">{data.row.cache}</:item>
-              </.list>
-            </.pp_paper>
+            <.list id="disk-details">
+              <:item title="Device">{data.row.device_kind}</:item>
+              <:item title="Bus">{data.row.bus}</:item>
+              <:item title="Boot order">{data.row.boot_order}</:item>
+              <:item title="Removable">{if(data.row.removable?, do: "Yes", else: "No")}</:item>
+              <:item title="Volume kind">{data.row.volume_kind}</:item>
+              <:item title="Source">{data.row.source}</:item>
+              <:item title="Size">{data.row.size}</:item>
+              <:item title="Storage class">{data.row.storage_class}</:item>
+              <:item title="PVC phase">{data.row.pvc_phase}</:item>
+              <:item title="Serial">{data.row.serial}</:item>
+              <:item title="Cache">{data.row.cache}</:item>
+            </.list>
           </div>
         </.async_result>
       </div>

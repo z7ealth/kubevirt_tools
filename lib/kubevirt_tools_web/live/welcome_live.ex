@@ -90,15 +90,15 @@ defmodule KubevirtToolsWeb.WelcomeLive do
               decoding="async"
             />
           </div>
-          <h1 class="welcome-screen__title font-semibold tracking-tight text-base-content">
-            <span class="welcome-screen__title-line block text-3xl sm:text-4xl md:text-5xl">
+          <h1 class="welcome-screen__title text-pp-on-surface">
+            <span class="welcome-screen__title-line block pp-headline-large sm:pp-display-medium">
               KubeVirt Tools
             </span>
-            <span class="welcome-screen__subtitle mt-3 block text-sm font-medium uppercase tracking-[0.22em] text-primary/90 sm:text-base">
+            <span class="welcome-screen__subtitle mt-3 block pp-title-medium uppercase tracking-[0.22em] text-pp-primary">
               Welcome
             </span>
           </h1>
-          <p class="welcome-screen__version mt-2 text-xs tabular-nums text-base-content/40">
+          <p class="welcome-screen__version mt-2 pp-label-medium tabular-nums text-pp-on-surface-variant">
             v{@app_version}
           </p>
         </div>
