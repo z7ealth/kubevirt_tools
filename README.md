@@ -72,7 +72,7 @@ Open [http://localhost:4000](http://localhost:4000) and upload a valid kubeconfi
    ./deploy/k8s/install.sh
    ```
 
-   It creates the `kubevirt-tools` namespace if needed, applies all the manifests, and waits for the rollout to finish. Works with either `kubectl` or `oc` (auto-detected), and accepts `-n NAMESPACE` to install elsewhere. On a detected OpenShift cluster it also automatically applies `route.yaml` and grants read access to OpenShift's built-in cluster-monitoring Prometheus (see **Kubernetes vs OpenShift** below); use `--openshift` / `--kubernetes` to force that detection, or `--no-openshift-monitoring` to skip just the monitoring grant. Safe to re-run.
+   It creates the `kubevirt-tools` namespace if needed, applies all the manifests, and waits for the rollout to finish. Works with either `kubectl` or `oc` (auto-detected), and accepts `-n NAMESPACE` to install elsewhere. On a detected OpenShift cluster it also automatically applies `route.yaml` and grants read access to OpenShift's built-in cluster-monitoring Prometheus (see **Kubernetes vs OpenShift** below); use `--openshift` / `--kubernetes` to force that detection, or `--no-openshift-monitoring` to skip just the monitoring grant. On OpenShift it also adds **KubeVirt Tools to the web console's application launcher** (the grid icon in the top bar, under *OpenShift Virtualization*) via a `ConsoleLink` pointing at the Route (`deploy/k8s/console_link.yaml.tmpl`; needs cluster-admin, skip with `--no-console-link`). Safe to re-run.
 
    To remove everything again:
 

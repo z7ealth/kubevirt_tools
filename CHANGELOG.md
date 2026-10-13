@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.1
+
+- **OpenShift application launcher**: `install.sh` now adds KubeVirt Tools to the web console's app menu (grid icon → *OpenShift Virtualization*, next to tools like OVTools) with a `ConsoleLink` pointing at the Route. Needs cluster-admin; `--no-console-link` skips it and `uninstall.sh` removes it. Existing installs get it by re-running `install.sh`.
+- **New favicon and app icons**: built from the KubeVirt Tools logo — a simplified mark that stays legible at tab size in light and dark browsers, plus the full logo for the home-screen (180/192/512px) and console-menu icons. The browser theme color is now the app's teal instead of Phoenix orange.
+
 ## v0.3.0
 
 - **Material Design 3 UI**: migrated to [PhoenixPaper](https://hex.pm/packages/phoenix_paper) 0.5.2. Every page now uses MD3 components, type scale and color roles, with a full light/dark scheme generated from the kubevirt.io teal (`assets/css/phoenix_paper_theme.css`).

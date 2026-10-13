@@ -2,7 +2,7 @@
 # Installs KubeVirt Tools into a Kubernetes (or OpenShift) cluster.
 #
 # Usage:
-#   ./install.sh [-n NAMESPACE] [--openshift|--kubernetes] [--no-openshift-monitoring]
+#   ./install.sh [-n NAMESPACE] [--openshift|--kubernetes] [--no-openshift-monitoring] [--no-console-link]
 #
 # Requires: kubectl (or oc) pointed at the target cluster/context.
 set -euo pipefail
@@ -11,10 +11,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NAMESPACE="kubevirt-tools"
 FORCE_MODE=""
 SKIP_OPENSHIFT_MONITORING=""
+SKIP_CONSOLE_LINK=""
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [-n NAMESPACE] [--openshift|--kubernetes] [--no-openshift-monitoring]
+Usage: $(basename "$0") [-n NAMESPACE] [--openshift|--kubernetes] [--no-openshift-monitoring] [--no-console-link]
 
   -n, --namespace NAME     Namespace to install into (default: kubevirt-tools)
       --openshift          Force-apply OpenShift-only manifests (Route, monitoring RBAC)
@@ -26,6 +27,10 @@ Usage: $(basename "$0") [-n NAMESPACE] [--openshift|--kubernetes] [--no-openshif
                            otherwise, alongside the Route. Only matters if you
                            plan to set PROMETHEUS_URL to that in-cluster
                            Prometheus; harmless to leave enabled if you don't.
+      --no-console-link    On an OpenShift cluster, don't add "KubeVirt Tools"
+                           to the web console's application launcher (the grid
+                           icon, "OpenShift Virtualization" section) — added
+                           automatically otherwise, pointing at the Route.
   -h, --help               Show this help
 EOF
 }
@@ -46,6 +51,10 @@ while [ $# -gt 0 ]; do
       ;;
     --no-openshift-monitoring)
       SKIP_OPENSHIFT_MONITORING="yes"
+      shift
+      ;;
+    --no-console-link)
+      SKIP_CONSOLE_LINK="yes"
       shift
       ;;
     -h|--help)
@@ -79,6 +88,21 @@ is_openshift() {
   "$KUBECTL" api-resources --api-group=route.openshift.io 2>/dev/null | grep -q routes
 }
 
+has_console_links() {
+  "$KUBECTL" api-resources --api-group=console.openshift.io 2>/dev/null | grep -q consolelinks
+}
+
+# The Route's host is assigned by the router shortly after creation.
+route_host() {
+  local host=""
+  for _ in $(seq 1 30); do
+    host=$("$KUBECTL" -n "$NAMESPACE" get route kubevirt-tools-route -o jsonpath='{.spec.host}' 2>/dev/null || true)
+    [ -n "$host" ] && break
+    sleep 1
+  done
+  echo "$host"
+}
+
 echo "==> Ensuring namespace '$NAMESPACE' exists"
 "$KUBECTL" create namespace "$NAMESPACE" --dry-run=client -o yaml | "$KUBECTL" apply -f -
 
@@ -102,6 +126,21 @@ if is_openshift; then
     apply openshift_monitoring_rolebinding.yaml
   else
     echo "==> Skipping openshift_monitoring_rolebinding.yaml (--no-openshift-monitoring)"
+  fi
+
+  if [ -n "$SKIP_CONSOLE_LINK" ]; then
+    echo "==> Skipping console_link.yaml.tmpl (--no-console-link)"
+  elif ! has_console_links; then
+    echo "==> Skipping console_link.yaml.tmpl (cluster has no console.openshift.io ConsoleLink API)"
+  else
+    CONSOLE_HOST=$(route_host)
+    if [ -z "$CONSOLE_HOST" ]; then
+      echo "==> Skipping console_link.yaml.tmpl (Route has no host yet; re-run this script to add it)"
+    else
+      echo "==> Applying console_link.yaml.tmpl (application launcher -> https://$CONSOLE_HOST)"
+      sed "s/__ROUTE_HOST__/$CONSOLE_HOST/g" "$SCRIPT_DIR/console_link.yaml.tmpl" | "$KUBECTL" apply -f - ||
+        echo "    WARNING: could not create the ConsoleLink (needs cluster-admin); the app works without it."
+    fi
   fi
 else
   echo "==> Skipping route.yaml (not an OpenShift cluster; use an Ingress instead)"

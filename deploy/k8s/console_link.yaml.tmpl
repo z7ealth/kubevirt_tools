@@ -1,0 +1,20 @@
+# OpenShift-only: adds "KubeVirt Tools" to the web console's application
+# launcher (the grid icon in the masthead), under the same "OpenShift
+# Virtualization" section other virtualization tools use.
+#
+# A template (.tmpl, so `oc apply -f deploy/k8s/` skips it): install.sh fills in __ROUTE_HOST__
+# with the Route's hostname once the Route exists, and only applies it when
+# the cluster serves console.openshift.io (pass --no-console-link to skip).
+# ConsoleLink is cluster-scoped, so creating it needs cluster-admin (or
+# equivalent) rights; the app itself never reads it.
+apiVersion: console.openshift.io/v1
+kind: ConsoleLink
+metadata:
+  name: kubevirt-tools
+spec:
+  location: ApplicationMenu
+  text: KubeVirt Tools
+  href: https://__ROUTE_HOST__
+  applicationMenu:
+    section: OpenShift Virtualization
+    imageURL: https://__ROUTE_HOST__/images/console-link-icon.png

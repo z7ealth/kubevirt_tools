@@ -67,6 +67,10 @@ is_openshift() {
 
 # Reverse of install.sh order.
 if is_openshift; then
+  if "$KUBECTL" api-resources --api-group=console.openshift.io 2>/dev/null | grep -q consolelinks; then
+    echo "==> Deleting ConsoleLink kubevirt-tools"
+    "$KUBECTL" delete consolelink kubevirt-tools --ignore-not-found
+  fi
   delete route.yaml
 else
   echo "==> Skipping route.yaml (not an OpenShift cluster)"
